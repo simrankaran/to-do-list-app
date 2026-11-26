@@ -7,9 +7,13 @@ RoundedRectangleBorder _rounded(double radius) =>
     RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
 
 ThemeData buildTheme(Brightness brightness) {
-  final scheme = ColorScheme.fromSeed(
+  final generated = ColorScheme.fromSeed(
     seedColor: brandSeed,
     brightness: brightness,
+  );
+  // Clean white in light mode and true black in dark mode, like mobile apps.
+  final scheme = generated.copyWith(
+    surface: brightness == Brightness.dark ? Colors.black : Colors.white,
   );
   final base = ThemeData(colorScheme: scheme);
   final text = base.textTheme;
@@ -100,6 +104,30 @@ ThemeData buildTheme(Brightness brightness) {
       selectedTileColor: scheme.secondaryContainer,
     ),
     dialogTheme: DialogThemeData(shape: _rounded(28)),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 60,
+      elevation: 0,
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: Colors.transparent,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          size: 28,
+          color: states.contains(WidgetState.selected)
+              ? scheme.onSurface
+              : scheme.onSurfaceVariant,
+        ),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+    ),
     popupMenuTheme: PopupMenuThemeData(shape: _rounded(14)),
     drawerTheme: DrawerThemeData(
       backgroundColor: scheme.surfaceContainerLow,

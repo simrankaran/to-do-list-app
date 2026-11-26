@@ -7,7 +7,15 @@ import 'task_tile.dart';
 
 /// Creates a task (when [task] is null) or edits an existing one.
 class TaskEditorPage extends StatefulWidget {
-  const TaskEditorPage({super.key, required this.store, this.task});
+  const TaskEditorPage({
+    super.key,
+    required this.store,
+    this.task,
+    this.initialTitle,
+  });
+
+  /// Pre-filled title for a new task (from the quick-add sheet).
+  final String? initialTitle;
 
   final TodoStore store;
   final Task? task;
@@ -34,7 +42,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   void initState() {
     super.initState();
     final t = widget.task;
-    _title = TextEditingController(text: t?.title ?? '');
+    _title = TextEditingController(text: t?.title ?? widget.initialTitle ?? '');
     _notes = TextEditingController(text: t?.notes ?? '');
     _priority = t?.priority ?? Priority.none;
     if (t != null) {

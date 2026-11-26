@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../state/todo_store.dart';
-import '../common/dialogs.dart';
+import '../common/label_actions.dart';
 import '../common/user_avatar.dart';
 
 /// Icon and color that represent a view.
@@ -147,76 +147,22 @@ class NavPanel extends StatelessWidget {
   }
 
   Future<void> _addProject(BuildContext context) async {
-    final result = await showNameColorDialog(
-      context,
-      title: 'New project',
-      confirmLabel: 'Create',
-    );
-    if (result == null) return;
-    final p = await store.addProject(result.$1, result.$2);
-    if (p != null) {
-      store.view = TodoView(ViewKind.project, p.id);
-      onSelected();
-    }
+    if (await addProject(context, store) != null) onSelected();
   }
 
-  Future<void> _editProject(BuildContext context, String id) async {
-    final p = store.projectById(id)!;
-    final result = await showNameColorDialog(
-      context,
-      title: 'Edit project',
-      confirmLabel: 'Save',
-      initialName: p.name,
-      initialColor: p.color,
-    );
-    if (result != null) {
-      await store.updateProject(p.copyWith(name: result.$1, color: result.$2));
-    }
-  }
+  Future<void> _editProject(BuildContext context, String id) =>
+      editProject(context, store, id);
 
-  Future<void> _deleteProject(BuildContext context, String id) async {
-    final p = store.projectById(id)!;
-    final ok = await confirm(
-      context,
-      title: 'Delete "${p.name}"?',
-      message: 'Its tasks will move to the Inbox.',
-    );
-    if (ok) await store.deleteProject(id);
-  }
+  Future<void> _deleteProject(BuildContext context, String id) =>
+      deleteProject(context, store, id);
 
-  Future<void> _addTag(BuildContext context) async {
-    final result = await showNameColorDialog(
-      context,
-      title: 'New tag',
-      confirmLabel: 'Create',
-      initialColor: 0xFF2196F3,
-    );
-    if (result != null) await store.addTag(result.$1, result.$2);
-  }
+  Future<void> _addTag(BuildContext context) => addTag(context, store);
 
-  Future<void> _editTag(BuildContext context, String id) async {
-    final t = store.tagById(id)!;
-    final result = await showNameColorDialog(
-      context,
-      title: 'Edit tag',
-      confirmLabel: 'Save',
-      initialName: t.name,
-      initialColor: t.color,
-    );
-    if (result != null) {
-      await store.updateTag(t.copyWith(name: result.$1, color: result.$2));
-    }
-  }
+  Future<void> _editTag(BuildContext context, String id) =>
+      editTag(context, store, id);
 
-  Future<void> _deleteTag(BuildContext context, String id) async {
-    final t = store.tagById(id)!;
-    final ok = await confirm(
-      context,
-      title: 'Delete #${t.name}?',
-      message: 'The tag is removed from every task. The tasks stay.',
-    );
-    if (ok) await store.deleteTag(id);
-  }
+  Future<void> _deleteTag(BuildContext context, String id) =>
+      deleteTag(context, store, id);
 }
 
 class _ProfileCard extends StatelessWidget {

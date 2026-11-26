@@ -11,6 +11,7 @@ import '../common/image_source.dart';
 import '../common/user_avatar.dart';
 import '../tasks/task_editor_page.dart';
 import '../tasks/task_tile.dart';
+import 'mobile_home.dart';
 import 'nav_panel.dart';
 
 class HomePage extends StatefulWidget {
@@ -113,11 +114,15 @@ class _HomePageState extends State<HomePage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _openEditor([Task? task]) {
+  void _openEditor([Task? task, String? initialTitle]) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: task == null,
-        builder: (_) => TaskEditorPage(store: _store, task: task),
+        builder: (_) => TaskEditorPage(
+          store: _store,
+          task: task,
+          initialTitle: initialTitle,
+        ),
       ),
     );
   }
@@ -158,6 +163,21 @@ class _HomePageState extends State<HomePage> {
       listenable: _store,
       builder: (context, _) {
         final wide = MediaQuery.sizeOf(context).width >= _wideLayout;
+        if (!wide) {
+          return MobileHome(
+            store: _store,
+            userEmail: widget.userEmail,
+            avatarUrl: _avatarUrl,
+            avatarBusy: _avatarBusy,
+            onChangeAvatar: widget.profile == null ? null : _changeAvatar,
+            onRemoveAvatar: widget.profile == null || _avatarUrl == null
+                ? null
+                : _removeAvatar,
+            onSignOut: _signOut,
+            onOpenEditor: _openEditor,
+            onDelete: _delete,
+          );
+        }
         final nav = NavPanel(
           store: _store,
           userEmail: widget.userEmail,

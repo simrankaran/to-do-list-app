@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -27,11 +28,17 @@ class TaskTile extends StatelessWidget {
     required this.task,
     required this.store,
     this.onTap,
+    this.onDoubleTap,
+    this.flat = false,
   });
 
   final Task task;
   final TodoStore store;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+
+  /// Edge-to-edge row (mobile) instead of a rounded card (desktop).
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -75,84 +82,102 @@ class TaskTile extends StatelessWidget {
           _Badge(text: '#${tag.name}', color: Color(tag.color)),
     ];
 
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 250),
-      opacity: task.done ? 0.55 : 1,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: 5,
-                  color: task.priority == Priority.none || task.done
-                      ? Colors.transparent
-                      : accent,
+    // The checkbox sits outside the InkWell so a double-tap handler on the
+    // row never delays ticking the box.
+    final row = IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 5,
+            color: task.priority == Priority.none || task.done
+                ? Colors.transparent
+                : accent,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 8, 0, 8),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Transform.scale(
+                scale: 1.15,
+                child: Checkbox(
+                  value: task.done,
+                  activeColor: scheme.primary,
+                  side: BorderSide(
+                    color: task.priority == Priority.none
+                        ? scheme.outline
+                        : accent,
+                    width: 2,
+                  ),
+                  onChanged: (_) {
+                    HapticFeedback.lightImpact();
+                    store.toggleDone(task);
+                  },
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(6, 8, 0, 8),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Transform.scale(
-                      scale: 1.15,
-                      child: Checkbox(
-                        value: task.done,
-                        activeColor: scheme.primary,
-                        side: BorderSide(
-                          color: task.priority == Priority.none
-                              ? scheme.outline
-                              : accent,
-                          width: 2,
-                        ),
-                        onChanged: (_) => store.toggleDone(task),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: onTap,
+              onDoubleTap: onDoubleTap,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 14, 8, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: theme.textTheme.titleMedium!.copyWith(
+                              decoration: task.done
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: task.done
+                                  ? scheme.onSurfaceVariant
+                                  : scheme.onSurface,
+                            ),
+                            child: Text(task.title),
+                          ),
+                          if (badges.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(spacing: 6, runSpacing: 6, children: badges),
+                          ],
+                        ],
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 14, 8, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 200),
-                          style: theme.textTheme.titleMedium!.copyWith(
-                            decoration: task.done
-                                ? TextDecoration.lineThrough
-                                : null,
-                            color: task.done
-                                ? scheme.onSurfaceVariant
-                                : scheme.onSurface,
-                          ),
-                          child: Text(task.title),
+                  if (task.priority != Priority.none)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 14, top: 14),
+                      child: Tooltip(
+                        message: '${task.priority.label} priority',
+                        child: Icon(
+                          Icons.flag_rounded,
+                          size: 20,
+                          color: accent,
                         ),
-                        if (badges.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(spacing: 6, runSpacing: 6, children: badges),
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-                if (task.priority != Priority.none)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 14, top: 14),
-                    child: Tooltip(
-                      message: '${task.priority.label} priority',
-                      child: Icon(Icons.flag_rounded, size: 20, color: accent),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
+    );
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 250),
+      opacity: task.done ? 0.55 : 1,
+      child: flat
+          ? Material(color: scheme.surface, child: row)
+          : Card(clipBehavior: Clip.antiAlias, child: row),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:my_app/app.dart';
 import 'package:my_app/data/profile_repository.dart';
 import 'package:my_app/features/common/image_source.dart';
+import 'package:my_app/features/common/user_avatar.dart';
 import 'package:my_app/features/home/home_page.dart';
 
 import 'fake_todo_repository.dart';
@@ -37,9 +38,16 @@ void main() {
     final repo = await pumpHome(tester);
     expect(find.text('Nothing here. Enjoy the calm.'), findsOneWidget);
 
-    await tester.tap(find.text('New task'));
+    // Phone layout: the âŠ• tab opens the quick-add sheet.
+    await tester.tap(find.byIcon(Icons.add_box_outlined));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'Buy milk');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What needs doing?'),
+      'Buy milk',
+    );
+    await tester.tap(find.text('More details'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Buy milk'), findsOneWidget);
     await tester.tap(find.text('High'));
     await tester.tap(find.text('Today'));
     await tester.tap(find.text('Save'));
@@ -102,6 +110,43 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.text('0/1'), findsOneWidget);
+  });
+
+  testWidgets('phone: quick add, double-tap to complete, profile tab', (
+    tester,
+  ) async {
+    final repo = await pumpHome(tester);
+
+    await tester.tap(find.byIcon(Icons.add_box_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What needs doing?'),
+      'Walk the dog',
+    );
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+    expect(repo.tasks.single.title, 'Walk the dog');
+    expect(find.text('Walk the dog'), findsOneWidget);
+
+    // Double-tap the row to mark it done.
+    await tester.tap(find.text('Walk the dog'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Walk the dog'));
+    await tester.pumpAndSettle();
+    expect(repo.tasks.single.done, isTrue);
+
+    // Profile tab shows the stats.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.byType(UserAvatar),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('test'), findsOneWidget); // handle from the email
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Projects'), findsNWidgets(2)); // stat + section
   });
 
   testWidgets('upload and remove a profile photo', (tester) async {

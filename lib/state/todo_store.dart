@@ -209,6 +209,22 @@ class TodoStore extends ChangeNotifier {
   static int _firstNonZero(List<int> values) =>
       values.firstWhere((v) => v != 0, orElse: () => 0);
 
+  /// A new task that fits the current view: its project or tag, and today's
+  /// or tomorrow's date for the Today and Upcoming views.
+  Task draftForView(String title) {
+    final v = _view;
+    return Task.draft(
+      title: title,
+      projectId: v.kind == ViewKind.project ? v.id : null,
+      tagIds: [if (v.kind == ViewKind.tag) v.id!],
+      dueAt: switch (v.kind) {
+        ViewKind.today => today,
+        ViewKind.upcoming => today.add(const Duration(days: 1)),
+        _ => null,
+      },
+    );
+  }
+
   // Task changes -------------------------------------------------------------
 
   Future<Task?> addTask(Task draft) => _attempt(() async {
