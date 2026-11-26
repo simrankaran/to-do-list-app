@@ -1,0 +1,11 @@
+# Netlify settings for the pre-built Flutter web app.
+# Flutter copies this file into build/web; deploy that folder as-is.
+[build]
+  publish = "."
+  command = ""
+
+# The app is a single page; send every path to index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
