@@ -1,4 +1,8 @@
 -- Security hardening after a review of the people/chat feature.
+-- Safe to run more than once: it runs as one transaction and skips
+-- anything that already exists.
+
+begin;
 
 -- 1. Internal trigger functions must not be callable through the API.
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
@@ -9,12 +13,12 @@ revoke execute on function public.tasks_touch() from public, anon, authenticated
 revoke all on all tables in schema public from anon;
 revoke truncate, references, trigger on all tables in schema public from authenticated;
 revoke all on public.assistant_usage from authenticated;
-alter default privileges for role postgres in schema public revoke all on tables from anon;
 
 -- 3. Profiles: the person who SENT a request can't see the other person's
 --    profile until it is accepted. The person who RECEIVED it can see who
 --    is asking.
-drop policy "read own and connected profiles" on public.profiles;
+drop policy if exists "read own and connected profiles" on public.profiles;
+drop policy if exists "read own, friends' and requesters' profiles" on public.profiles;
 
 create policy "read own, friends' and requesters' profiles" on public.profiles
   for select to authenticated
@@ -40,7 +44,15 @@ grant insert (id, display_name, bio, avatar_url) on public.profiles to authentic
 grant update (id, display_name, bio, avatar_url) on public.profiles to authenticated;
 
 -- A profile photo must be the owner's own file in this project's avatars
--- bucket, so it can't be a link to someone else's server.
+-- bucket, so it can't be a link to someone else's server. Clear any photo
+-- link that doesn't fit first, so the rule can be added.
+update public.profiles
+set avatar_url = null
+where avatar_url is not null
+  and avatar_url not like
+    'https://cfrjrvkkkrkxggsticwe.supabase.co/storage/v1/object/public/avatars/' || id::text || '/%';
+
+alter table public.profiles drop constraint if exists profiles_avatar_is_own_file;
 alter table public.profiles add constraint profiles_avatar_is_own_file check (
   avatar_url is null
   or avatar_url like
@@ -77,13 +89,14 @@ grant insert (recipient_id, body) on public.messages to authenticated;
 -- 5. Friend requests: remember the email that was typed (shown to the sender
 --    while waiting, since the profile is now hidden), and cap how many
 --    requests one account can send per day so emails can't be probed in bulk.
-alter table public.friendships add column requested_email text;
+alter table public.friendships add column if not exists requested_email text;
 
-create table public.friend_request_log (
+create table if not exists public.friend_request_log (
   user_id    uuid not null references auth.users (id) on delete cascade,
   created_at timestamptz not null default now()
 );
-create index friend_request_log_user_idx on public.friend_request_log (user_id, created_at);
+create index if not exists friend_request_log_user_idx
+  on public.friend_request_log (user_id, created_at);
 alter table public.friend_request_log enable row level security;
 revoke all on public.friend_request_log from anon, authenticated;
 
@@ -149,5 +162,8 @@ revoke execute on function public.send_friend_request(text) from public, anon;
 grant execute on function public.send_friend_request(text) to authenticated;
 
 -- 6. An attachment record can only point inside its owner's storage folder.
+alter table public.task_attachments drop constraint if exists task_attachments_own_path;
 alter table public.task_attachments add constraint task_attachments_own_path
   check (path like user_id::text || '/%');
+
+commit;

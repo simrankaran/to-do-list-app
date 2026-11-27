@@ -6,9 +6,9 @@ const brandSeed = Color(0xFF5B5BD6);
 RoundedRectangleBorder _rounded(double radius) =>
     RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
 
-ThemeData buildTheme(Brightness brightness) {
+ThemeData buildTheme(Brightness brightness, {Color seed = brandSeed}) {
   final generated = ColorScheme.fromSeed(
-    seedColor: brandSeed,
+    seedColor: seed,
     brightness: brightness,
   );
   // Clean white in light mode and true black in dark mode, like mobile apps.

@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/env.dart';
+import 'services/app_settings.dart';
 import 'services/reminders.dart';
+import 'services/sound_effects.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,5 +14,12 @@ Future<void> main() async {
     publishableKey: supabasePublishableKey,
   );
   final reminders = await LocalReminders.create();
-  runApp(TodoApp(reminders: reminders));
+  final settings = await AppSettings.load();
+  runApp(
+    TodoApp(
+      reminders: reminders,
+      settings: settings,
+      sounds: AssetSoundPlayer(),
+    ),
+  );
 }

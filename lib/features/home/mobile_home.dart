@@ -25,6 +25,7 @@ class MobileHome extends StatefulWidget {
     this.onChangeAvatar,
     this.onRemoveAvatar,
     this.onOpenAssistant,
+    this.onOpenBoard,
     this.onOpenPeople,
     this.onOpenSettings,
     this.peopleBadge = 0,
@@ -32,6 +33,9 @@ class MobileHome extends StatefulWidget {
 
   /// Opens the AI assistant; null hides its button.
   final VoidCallback? onOpenAssistant;
+
+  /// Opens the kanban board; null hides its button.
+  final VoidCallback? onOpenBoard;
 
   /// Opens friends and chat; null hides its button.
   final VoidCallback? onOpenPeople;
@@ -101,6 +105,7 @@ class _MobileHomeState extends State<MobileHome> {
             onOpen: (t) => widget.onOpenEditor(t, null, null),
             onDelete: widget.onDelete,
             onOpenAssistant: widget.onOpenAssistant,
+            onOpenBoard: widget.onOpenBoard,
             onOpenPeople: widget.onOpenPeople,
             peopleBadge: widget.peopleBadge,
           ),
@@ -197,6 +202,7 @@ class _HomeTab extends StatelessWidget {
     required this.onOpen,
     required this.onDelete,
     this.onOpenAssistant,
+    this.onOpenBoard,
     this.onOpenPeople,
     this.peopleBadge = 0,
   });
@@ -205,6 +211,7 @@ class _HomeTab extends StatelessWidget {
   final void Function(Task task) onOpen;
   final Future<void> Function(Task task) onDelete;
   final VoidCallback? onOpenAssistant;
+  final VoidCallback? onOpenBoard;
   final VoidCallback? onOpenPeople;
   final int peopleBadge;
 
@@ -322,6 +329,12 @@ class _HomeTab extends StatelessWidget {
           ),
         ),
         actions: [
+          if (onOpenBoard != null)
+            IconButton(
+              tooltip: 'Board',
+              icon: const Icon(Icons.view_kanban_outlined),
+              onPressed: onOpenBoard,
+            ),
           if (onOpenPeople != null)
             IconButton(
               tooltip: 'People',

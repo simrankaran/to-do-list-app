@@ -52,6 +52,12 @@ class TaskTile extends StatelessWidget {
     const live = Color(0xFF16A34A);
     final inProgress = task.isInProgress(store.now);
     final badges = <Widget>[
+      if (task.inProgress && !task.done)
+        _Badge(
+          icon: Icons.directions_run_rounded,
+          text: 'Doing',
+          color: scheme.primary,
+        ),
       if (inProgress)
         const _Badge(
           icon: Icons.play_circle_fill_rounded,
@@ -131,8 +137,14 @@ class TaskTile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(6, 8, 0, 8),
             child: Align(
               alignment: Alignment.topCenter,
-              child: Transform.scale(
-                scale: 1.15,
+              // Springs in when ticked, so finishing a task feels good.
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey(task.done),
+                tween: Tween(begin: task.done ? 0.55 : 1.0, end: 1.0),
+                duration: const Duration(milliseconds: 550),
+                curve: Curves.elasticOut,
+                builder: (context, s, child) =>
+                    Transform.scale(scale: 1.15 * s, child: child),
                 child: Checkbox(
                   value: task.done,
                   activeColor: scheme.primary,

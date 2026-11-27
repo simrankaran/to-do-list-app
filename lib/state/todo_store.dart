@@ -7,6 +7,18 @@ import '../data/recurrence.dart';
 import '../data/todo_repository.dart';
 import '../services/reminders.dart';
 
+/// A finished task, and whether it was the last one due today.
+typedef Completion = ({Task task, bool clearedToday});
+
+enum BoardColumn {
+  todo('To do'),
+  doing('Doing'),
+  done('Done');
+
+  const BoardColumn(this.label);
+  final String label;
+}
+
 enum ViewKind { inbox, today, upcoming, all, completed, project, tag }
 
 /// Which slice of tasks the user is looking at.
@@ -53,6 +65,50 @@ class TodoStore extends ChangeNotifier {
   final TodoRepository _repo;
   final DateTime Function() _clock;
   final _errors = StreamController<String>.broadcast();
+  final _completions = StreamController<Completion>.broadcast();
+
+  /// Fires when a top-level task is completed, for celebrations.
+  Stream<Completion> get completions => _completions.stream;
+
+  /// Open top-level tasks due today or earlier.
+  int openDueTodayCount() => tasks
+      .where(
+        (t) =>
+            !t.isSubtask &&
+            !t.done &&
+            t.dueAt != null &&
+            !dateOnly(t.dueAt!).isAfter(today),
+      )
+      .length;
+
+  /// Moves [task] to a column of the board.
+  Future<void> moveOnBoard(Task task, BoardColumn column) async {
+    switch (column) {
+      case BoardColumn.done:
+        if (!task.done) await toggleDone(task);
+      case BoardColumn.doing:
+        if (task.done) {
+          await updateTask(
+            task.copyWith(done: false, completedAt: null, inProgress: true),
+          );
+        } else if (!task.inProgress) {
+          await updateTask(task.copyWith(inProgress: true));
+        }
+      case BoardColumn.todo:
+        if (task.done || task.inProgress) {
+          await updateTask(
+            task.copyWith(done: false, completedAt: null, inProgress: false),
+          );
+        }
+    }
+  }
+
+  /// Which board column [task] belongs in.
+  static BoardColumn columnOf(Task task) => task.done
+      ? BoardColumn.done
+      : task.inProgress
+      ? BoardColumn.doing
+      : BoardColumn.todo;
 
   List<Project> projects = [];
   List<Tag> tags = [];
@@ -173,6 +229,12 @@ class TodoStore extends ChangeNotifier {
     return (done: done, total: total);
   }
 
+  /// Top-level tasks in the current view, finished ones included, sorted.
+  /// Used by the board, which shows every column at once.
+  List<Task> tasksForBoard() =>
+      tasks.where((t) => !t.isSubtask && _inView(t, _view)).toList()
+        ..sort(_compare);
+
   /// Top-level tasks for the current view, search and sort settings.
   /// A search looks across all tasks, not just the current view.
   List<Task> get visibleTasks {
@@ -263,15 +325,24 @@ class TodoStore extends ChangeNotifier {
   /// next occurrence (with fresh copies of its subtasks).
   Future<void> toggleDone(Task task) async {
     final completing = !task.done;
+    final dueBefore = openDueTodayCount();
     await updateTask(
       task.copyWith(
         done: completing,
+        inProgress: false,
         completedAt: completing ? _clock() : null,
       ),
     );
     if (!completing) return;
     final saved = tasks.where((t) => t.id == task.id).firstOrNull;
     if (saved == null || !saved.done) return; // the change was rolled back
+
+    if (!task.isSubtask && !_completions.isClosed) {
+      _completions.add((
+        task: saved,
+        clearedToday: dueBefore > 0 && openDueTodayCount() == 0,
+      ));
+    }
 
     final draft = nextOccurrence(task, today);
     if (draft == null) return;
@@ -532,6 +603,7 @@ class TodoStore extends ChangeNotifier {
   @override
   void dispose() {
     _errors.close();
+    _completions.close();
     super.dispose();
   }
 }

@@ -9,9 +9,13 @@ import '../../data/profile_repository.dart';
 import '../../data/todo_repository.dart';
 import '../../data/social_models.dart';
 import '../../data/social_repository.dart';
+import '../../services/app_settings.dart';
 import '../../services/reminders.dart';
+import '../../services/sound_effects.dart';
 import '../../state/todo_store.dart';
 import '../assistant/assistant_page.dart';
+import '../board/board_page.dart';
+import '../common/celebration.dart';
 import '../common/image_source.dart';
 import '../common/user_avatar.dart';
 import '../social/people_page.dart';
@@ -34,7 +38,14 @@ class HomePage extends StatefulWidget {
     this.assistant,
     this.homeWidget,
     this.social,
+    this.settings,
+    this.sounds = const SilentSoundPlayer(),
   });
+
+  /// Theme, sound and confetti choices; without it there are no
+  /// celebrations and Settings has no Appearance section.
+  final AppSettings? settings;
+  final SoundPlayer sounds;
 
   /// The AI assistant; without it the assistant button is hidden.
   final AssistantService? assistant;
@@ -74,6 +85,9 @@ class _HomePageState extends State<HomePage> {
 
   // Kept from the first build so its live connection isn't recreated.
   late final SocialRepository? _social = widget.social;
+  final _celebration = GlobalKey<CelebrationOverlayState>();
+  final _boardCelebration = GlobalKey<CelebrationOverlayState>();
+  late final StreamSubscription<Completion> _completionSub;
   StreamSubscription<void>? _socialSub;
 
   /// Unread chat messages plus requests waiting for an answer.
@@ -85,6 +99,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _store = TodoStore(widget.repository)..load();
     _errorSub = _store.errors.listen(_showMessage);
+    _completionSub = _store.completions.listen(_celebrate);
     _store.reminders = widget.reminders;
     _store.addListener(_queueReminderSync);
     final social = _social;
@@ -139,6 +154,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _errorSub.cancel();
+    _completionSub.cancel();
     _reminderTimer?.cancel();
     _socialSub?.cancel();
     _store.removeListener(_queueReminderSync);
@@ -233,6 +249,7 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsPage(
+          appSettings: widget.settings,
           social: social,
           profile: widget.profile,
           pickImage: widget.pickImage,
@@ -245,6 +262,33 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  void _openBoard() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CelebrationOverlay(
+          key: _boardCelebration,
+          child: BoardPage(store: _store, onOpen: _openEditor),
+        ),
+      ),
+    );
+  }
+
+  /// Sound and confetti when a task is finished, bigger when today is clear.
+  void _celebrate(Completion c) {
+    final settings = widget.settings;
+    if (settings == null) return;
+    // Celebrate on whichever screen is showing: the board or home.
+    final overlay = _boardCelebration.currentState ?? _celebration.currentState;
+    if (c.clearedToday) {
+      if (settings.sounds) widget.sounds.play(SoundEffect.allDone);
+      if (settings.celebrations) overlay?.bigBurst();
+      _showMessage('🎉 All done for today. Nice work!');
+    } else {
+      if (settings.sounds) widget.sounds.play(SoundEffect.complete);
+      if (settings.celebrations) overlay?.burst();
+    }
   }
 
   void _openAssistant() {
@@ -275,7 +319,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      CelebrationOverlay(key: _celebration, child: _content(context));
+
+  Widget _content(BuildContext context) {
     return ListenableBuilder(
       listenable: _store,
       builder: (context, _) {
@@ -294,6 +341,7 @@ class _HomePageState extends State<HomePage> {
             onOpenEditor: _openEditor,
             onDelete: _delete,
             onOpenAssistant: widget.assistant == null ? null : _openAssistant,
+            onOpenBoard: _openBoard,
             onOpenPeople: _social == null ? null : _openPeople,
             onOpenSettings: _social == null ? null : _openSettings,
             peopleBadge: _peopleBadge,
@@ -342,6 +390,11 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.visibility_off_outlined),
                 selectedIcon: const Icon(Icons.visibility_rounded),
                 onPressed: () => _store.showCompleted = !_store.showCompleted,
+              ),
+              IconButton(
+                tooltip: 'Board',
+                icon: const Icon(Icons.view_kanban_outlined),
+                onPressed: _openBoard,
               ),
               if (_social != null) ...[
                 IconButton(

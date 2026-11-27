@@ -122,6 +122,7 @@ class Task {
     this.alertSound = AlertSound.standard,
     this.repeat = RepeatRule.none,
     this.repeatDays = 0,
+    this.inProgress = false,
   });
 
   /// A task that has not been saved yet. The database assigns the real id.
@@ -191,6 +192,7 @@ class Task {
       alertSound: AlertSound.parse(json['alert_sound'] as String?),
       repeat: RepeatRule.parse(json['repeat_rule'] as String?),
       repeatDays: (json['repeat_days'] as num?)?.toInt() ?? 0,
+      inProgress: json['in_progress'] as bool? ?? false,
       tagIds: [
         for (final link in links)
           (link as Map<String, dynamic>)['tag_id'] as String,
@@ -234,6 +236,9 @@ class Task {
   /// Sunday.
   final int repeatDays;
 
+  /// Being worked on right now (the board's "Doing" column).
+  final bool inProgress;
+
   /// Whether [RepeatRule.days] includes [weekday] (1 = Monday ... 7 = Sunday).
   bool repeatsOn(int weekday) => repeatDays & (1 << (weekday - 1)) != 0;
 
@@ -267,6 +272,7 @@ class Task {
     'alert_sound': alertSound.key,
     'repeat_rule': repeat.key,
     'repeat_days': repeatDays,
+    'in_progress': inProgress,
   };
 
   /// Pass `null` for [projectId], [dueAt], [startsAt] or [endsAt] to clear them.
@@ -283,6 +289,7 @@ class Task {
     AlertSound? alertSound,
     RepeatRule? repeat,
     int? repeatDays,
+    bool? inProgress,
     List<String>? tagIds,
     Object? projectId = _keep,
     Object? dueAt = _keep,
@@ -305,6 +312,7 @@ class Task {
     alertSound: alertSound ?? this.alertSound,
     repeat: repeat ?? this.repeat,
     repeatDays: repeatDays ?? this.repeatDays,
+    inProgress: inProgress ?? this.inProgress,
     tagIds: tagIds ?? this.tagIds,
     startsAt: identical(startsAt, _keep)
         ? this.startsAt

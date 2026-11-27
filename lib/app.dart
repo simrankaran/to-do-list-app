@@ -9,11 +9,19 @@ import 'data/social_repository.dart';
 import 'data/supabase_todo_repository.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
+import 'services/app_settings.dart';
 import 'services/home_widget_sync.dart';
 import 'services/reminders.dart';
+import 'services/sound_effects.dart';
 
 class TodoApp extends StatelessWidget {
-  const TodoApp({super.key, this.home, this.reminders = const NoReminders()});
+  const TodoApp({
+    super.key,
+    this.home,
+    this.reminders = const NoReminders(),
+    this.settings,
+    this.sounds = const SilentSoundPlayer(),
+  });
 
   /// Overrides the signed-in/signed-out switch (used by tests).
   final Widget? home;
@@ -21,23 +29,46 @@ class TodoApp extends StatelessWidget {
   /// Phone notifications for task start and end times.
   final ReminderScheduler reminders;
 
-  @override
-  Widget build(BuildContext context) {
+  /// Theme, sound and confetti choices; null uses the default look.
+  final AppSettings? settings;
+  final SoundPlayer sounds;
+
+  MaterialApp _app(AppSettings? s) {
+    final seed = s?.theme.seed ?? brandSeed;
     return MaterialApp(
       title: 'Tasks',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      home: home ?? AuthGate(reminders: reminders),
+      theme: buildTheme(Brightness.light, seed: seed),
+      darkTheme: buildTheme(Brightness.dark, seed: seed),
+      themeMode: s?.themeMode ?? ThemeMode.system,
+      // Colours glide into each other when the theme changes.
+      themeAnimationDuration: const Duration(milliseconds: 400),
+      home:
+          home ??
+          AuthGate(reminders: reminders, settings: settings, sounds: sounds),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = settings;
+    if (s == null) return _app(null);
+    return ListenableBuilder(listenable: s, builder: (_, _) => _app(s));
   }
 }
 
 /// Shows the sign-in page or the user's tasks depending on the session.
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key, required this.reminders});
+  const AuthGate({
+    super.key,
+    required this.reminders,
+    this.settings,
+    this.sounds = const SilentSoundPlayer(),
+  });
 
   final ReminderScheduler reminders;
+  final AppSettings? settings;
+  final SoundPlayer sounds;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +93,8 @@ class AuthGate extends StatelessWidget {
           ),
           homeWidget: updateHomeWidget,
           social: SupabaseSocialRepository(Supabase.instance.client),
+          settings: settings,
+          sounds: sounds,
           onSignOut: auth.signOut,
         );
       },

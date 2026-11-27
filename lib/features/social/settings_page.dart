@@ -4,6 +4,7 @@ import '../../data/profile_repository.dart';
 import '../../data/social_models.dart';
 import '../../data/social_repository.dart';
 import '../../data/todo_repository.dart';
+import '../../services/app_settings.dart';
 import '../common/image_source.dart';
 import '../common/label_actions.dart';
 import '../common/user_avatar.dart';
@@ -20,7 +21,11 @@ class SettingsPage extends StatefulWidget {
     this.email,
     this.avatarUrl,
     this.onAvatarChanged,
+    this.appSettings,
   });
+
+  /// Theme, sound and confetti choices; null hides the Appearance section.
+  final AppSettings? appSettings;
 
   final SocialRepository social;
 
@@ -278,6 +283,10 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          if (widget.appSettings != null) ...[
+            const SizedBox(height: 24),
+            _AppearanceSection(settings: widget.appSettings!),
+          ],
           const SizedBox(height: 20),
           if (widget.email != null)
             ListTile(
@@ -313,4 +322,147 @@ class _SettingsPageState extends State<SettingsPage> {
 
 class _Cancelled implements Exception {
   const _Cancelled();
+}
+
+/// Colour theme, light/dark mode, and the sound and confetti switches.
+class _AppearanceSection extends StatelessWidget {
+  const _AppearanceSection({required this.settings});
+
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Appearance', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final t in appThemes)
+                _ThemeSwatch(
+                  appTheme: t,
+                  selected: t.key == settings.theme.key,
+                  onTap: () => settings.theme = t,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SegmentedButton<ThemeMode>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text('Auto'),
+                icon: Icon(Icons.brightness_auto_rounded),
+              ),
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text('Light'),
+                icon: Icon(Icons.light_mode_rounded),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                label: Text('Dark'),
+                icon: Icon(Icons.dark_mode_rounded),
+              ),
+            ],
+            selected: {settings.themeMode},
+            onSelectionChanged: (s) => settings.themeMode = s.first,
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: Icon(
+              settings.sounds
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_off_rounded,
+            ),
+            title: const Text('Sounds'),
+            subtitle: const Text('A soft pop when you finish a task'),
+            value: settings.sounds,
+            onChanged: (v) => settings.sounds = v,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: Icon(Icons.celebration_rounded, color: scheme.primary),
+            title: const Text('Confetti'),
+            subtitle: const Text('Celebrate finished tasks and a clear day'),
+            value: settings.celebrations,
+            onChanged: (v) => settings.celebrations = v,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeSwatch extends StatelessWidget {
+  const _ThemeSwatch({
+    required this.appTheme,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppTheme appTheme;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${appTheme.name} theme',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [appTheme.seed, appTheme.accent],
+                ),
+                border: Border.all(
+                  color: selected
+                      ? theme.colorScheme.onSurface
+                      : Colors.transparent,
+                  width: 3,
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: appTheme.seed.withValues(alpha: 0.45),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: selected
+                  ? const Icon(Icons.check_rounded, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(appTheme.name, style: theme.textTheme.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
 }
