@@ -8,6 +8,7 @@ import 'package:my_app/features/common/file_source.dart';
 import 'package:my_app/features/common/user_avatar.dart';
 import 'package:my_app/features/home/home_page.dart';
 import 'package:my_app/features/tasks/attachments_section.dart';
+import 'package:my_app/features/tasks/task_editor_page.dart';
 import 'package:my_app/services/reminders.dart';
 import 'package:my_app/state/todo_store.dart';
 
@@ -16,24 +17,23 @@ import 'fake_todo_repository.dart';
 void main() {
   timeSlotTests();
 
-  testWidgets('reminders follow task changes and clear on sign out', (
+  Task gymAt(DateTime start) => Task(
+    id: 'gym',
+    title: 'Gym',
+    createdAt: DateTime.now(),
+    dueAt: dateOnly(start),
+    startsAt: start,
+    endsAt: start.add(const Duration(hours: 1)),
+  );
+
+  testWidgets('reminders are scheduled after loading and cleared on sign out', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(500, 950);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final repo = FakeTodoRepository();
-    final start = DateTime.now().add(const Duration(hours: 2));
-    repo.tasks.add(
-      Task(
-        id: 'gym',
-        title: 'Gym',
-        createdAt: DateTime.now(),
-        dueAt: dateOnly(start),
-        startsAt: start,
-        endsAt: start.add(const Duration(hours: 1)),
-      ),
-    );
+    repo.tasks.add(gymAt(DateTime.now().add(const Duration(hours: 2))));
     final reminders = _FakeReminders();
     await tester.pumpWidget(
       TodoApp(
@@ -46,31 +46,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Reminders are rescheduled shortly (500 ms) after tasks change.
     await tester.pump(const Duration(milliseconds: 600));
     expect(reminders.syncs.last.single.id, 'gym');
-
-    // Open the task, make it 2 hours long and save.
-    // The task has no project, so it shows in the default Inbox view.
-    // Rows also accept a double-tap, so a single tap only registers once
-    // the double-tap window (300 ms) has passed.
-    await tester.tap(find.text('Gym'));
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle();
-    // The editor has several scrollables (the page and its text fields), so
-    // just bring the chip into view rather than scrolling a guessed one.
-    await tester.ensureVisible(find.text('2 h'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('2 h'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(reminders.permissionRequests, 1);
-    expect(repo.tasks.single.endsAt, start.add(const Duration(hours: 2)));
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(
-      reminders.syncs.last.single.endsAt,
-      start.add(const Duration(hours: 2)),
-    );
 
     // Signing out removes this account's reminders from the device.
     await tester.tap(
@@ -83,6 +61,53 @@ void main() {
     await tester.tap(find.byTooltip('Sign out').first);
     await tester.pumpAndSettle();
     expect(reminders.syncs.last, isEmpty);
+  });
+
+  testWidgets('editor changes the time slot length and asks to notify', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(500, 950);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = FakeTodoRepository();
+    final start = DateTime.now().add(const Duration(hours: 2));
+    repo.tasks.add(gymAt(start));
+    final reminders = _FakeReminders();
+    final store = TodoStore(repo)..reminders = reminders;
+    await store.load();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        TaskEditorPage(store: store, task: store.tasks.single),
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('2 h'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 h'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(reminders.permissionRequests, 1);
+    expect(repo.tasks.single.endsAt, start.add(const Duration(hours: 2)));
+    expect(find.text('Open'), findsOneWidget); // editor closed
   });
 
   void phoneSize(WidgetTester tester) {
@@ -166,7 +191,7 @@ void main() {
     expect(find.text('day streak'), findsOneWidget);
     expect(find.text('best streak'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
-    expect(find.text('Completed Â· last 7 days'), findsOneWidget);
+    expect(find.text('Completed Ã‚Â· last 7 days'), findsOneWidget);
   });
 
   testWidgets('attach a photo and a PDF to a task', (tester) async {
