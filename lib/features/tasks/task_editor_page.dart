@@ -582,7 +582,7 @@ class _TimeSlotEditor extends StatelessWidget {
               time.format(end),
               dateOnly(end) == dateOnly(start)
                   ? _label(length)
-                  : 'next day Â· ${_label(length)}',
+                  : 'next day · ${_label(length)}',
               () => _pickEnd(context),
             ),
           ],

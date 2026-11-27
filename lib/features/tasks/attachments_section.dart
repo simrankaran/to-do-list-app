@@ -214,7 +214,7 @@ class _Thumb extends StatelessWidget {
     }
 
     return Tooltip(
-      message: '${attachment.name} Â· ${attachment.sizeLabel}',
+      message: '${attachment.name} · ${attachment.sizeLabel}',
       child: SizedBox.square(
         dimension: _thumbSize,
         child: Stack(

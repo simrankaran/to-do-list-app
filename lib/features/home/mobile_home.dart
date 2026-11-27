@@ -260,7 +260,7 @@ class _HomeTab extends StatelessWidget {
                 child: _Empty(
                   icon: Icons.wb_sunny_rounded,
                   title: 'Nothing here. Enjoy the calm.',
-                  subtitle: 'Tap âŠ• below to add a task.',
+                  subtitle: 'Tap ⊕ below to add a task.',
                 ),
               )
             else

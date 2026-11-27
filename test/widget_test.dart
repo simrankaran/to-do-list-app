@@ -38,7 +38,7 @@ void main() {
     final repo = await pumpHome(tester);
     expect(find.text('Nothing here. Enjoy the calm.'), findsOneWidget);
 
-    // Phone layout: the âŠ• tab opens the quick-add sheet.
+    // Phone layout: the ⊕ tab opens the quick-add sheet.
     await tester.tap(find.byIcon(Icons.add_box_outlined));
     await tester.pumpAndSettle();
     await tester.enterText(

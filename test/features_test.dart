@@ -194,7 +194,7 @@ void main() {
     expect(find.text('day streak'), findsOneWidget);
     expect(find.text('best streak'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
-    expect(find.text('Completed Ã‚Â· last 7 days'), findsOneWidget);
+    expect(find.text('Completed · last 7 days'), findsOneWidget);
   });
 
   testWidgets('attach a photo and a PDF to a task', (tester) async {
