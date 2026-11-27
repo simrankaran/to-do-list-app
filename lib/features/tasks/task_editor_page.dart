@@ -705,8 +705,8 @@ class _AlertOptions extends StatelessWidget {
 
   static String _earlyLabel(int minutes) => switch (minutes) {
     0 => 'No early reminder',
-    60 => '1 hour before it starts',
-    _ => '$minutes minutes before it starts',
+    60 => '1 hour before',
+    _ => '$minutes min before',
   };
 
   @override
@@ -723,13 +723,18 @@ class _AlertOptions extends StatelessWidget {
       children: [
         DropdownButtonFormField<int>(
           initialValue: earlyMinutes,
+          // Fill the field and shorten long text instead of overflowing.
+          isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Early reminder',
             prefixIcon: Icon(Icons.alarm_rounded),
           ),
           items: [
             for (final m in earlyReminderOptions)
-              DropdownMenuItem(value: m, child: Text(_earlyLabel(m))),
+              DropdownMenuItem(
+                value: m,
+                child: Text(_earlyLabel(m), overflow: TextOverflow.ellipsis),
+              ),
           ],
           onChanged: (v) => onEarlyChanged(v ?? 0),
         ),
@@ -765,13 +770,17 @@ class _AlertOptions extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<AlertSound>(
                   initialValue: sound,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Alert sound',
                     prefixIcon: Icon(Icons.music_note_rounded),
                   ),
                   items: [
                     for (final s in AlertSound.values)
-                      DropdownMenuItem(value: s, child: Text(s.label)),
+                      DropdownMenuItem(
+                        value: s,
+                        child: Text(s.label, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: (v) => onSoundChanged(v ?? AlertSound.standard),
                 ),
