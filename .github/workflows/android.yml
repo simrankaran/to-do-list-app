@@ -37,11 +37,17 @@ jobs:
         shell: bash
         run: |
           [ -f test-results.json ] || exit 0
-          jq -r 'select(.type=="testStart") | "\(.test.id)\t\(.test.name)"' test-results.json > names.tsv
-          jq -r 'select(.type=="error") | "\(.testID)\t\(.error | gsub("[\r\n]+"; " "))"' test-results.json |
-          while IFS=$'\t' read -r id err; do
-            name=$(awk -F'\t' -v id="$id" '$1 == id { print $2 }' names.tsv)
-            echo "::error title=Failed test: ${name}::${err:0:900}"
+          for id in $(jq -r 'select(.type=="error") | .testID' test-results.json | sort -u); do
+            name=$(jq -r --argjson id "$id" 'select(.type=="testStart" and .test.id==$id) | .test.name' test-results.json)
+            # Flutter prints the real exception as log lines before the error.
+            details=$(jq -r --argjson id "$id" 'select(.type=="print" and .testID==$id) | .message' test-results.json \
+              | grep -v '^[═╡╞ ]*$' | tr '\n' ' ' | tr -s ' ' | cut -c1-1800)
+            if [ -z "$details" ]; then
+              details=$(jq -r --argjson id "$id" 'select(.type=="error" and .testID==$id) | .error' test-results.json \
+                | tr '\n' ' ' | tr -s ' ' | cut -c1-1800)
+            fi
+            details=${details//%/%25}
+            echo "::error title=Failed test: ${name}::${details}"
           done
 
       - name: Build APK

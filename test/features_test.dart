@@ -187,7 +187,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Your progress'), 200);
+    // Bring the stats into view directly; scrollUntilVisible needs exactly
+    // one scrollable on screen, which the profile tab no longer guarantees.
+    await tester.ensureVisible(find.text('Your progress'));
+    await tester.pumpAndSettle();
     expect(find.text('day streak'), findsOneWidget);
     expect(find.text('best streak'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
