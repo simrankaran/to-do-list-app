@@ -37,6 +37,41 @@ class Tag {
       Tag(id: id, name: name ?? this.name, color: color ?? this.color);
 }
 
+/// How a task's notifications get your attention.
+enum AlertStyle {
+  sound('Sound', 'Sound, vibration and a pop-up banner'),
+  vibrate('Vibrate', 'Vibration only, no sound'),
+  silent('Silent', 'Shows quietly in the notification list');
+
+  const AlertStyle(this.label, this.description);
+  final String label;
+  final String description;
+
+  static AlertStyle parse(String? value) =>
+      values.firstWhere((s) => s.name == value, orElse: () => sound);
+}
+
+/// The sound a task's notifications play (when the style is [AlertStyle.sound]).
+enum AlertSound {
+  standard('default', 'Phone default'),
+  chime('chime', 'Chime'),
+  bell('bell', 'Bell'),
+  beep('beep', 'Beep'),
+  digital('digital', 'Digital');
+
+  const AlertSound(this.key, this.label);
+
+  /// Stored value, and the Android sound file name in res/raw.
+  final String key;
+  final String label;
+
+  static AlertSound parse(String? value) =>
+      values.firstWhere((s) => s.key == value, orElse: () => standard);
+}
+
+/// Minutes-before-start options for the early heads-up (0 = off).
+const earlyReminderOptions = [0, 5, 10, 15, 30, 60];
+
 enum Priority {
   none('None'),
   low('Low'),
@@ -63,6 +98,11 @@ class Task {
     this.startsAt,
     this.endsAt,
     this.remind = true,
+    this.startMessage = '',
+    this.endMessage = '',
+    this.earlyMinutes = 0,
+    this.alertStyle = AlertStyle.sound,
+    this.alertSound = AlertSound.standard,
   });
 
   /// A task that has not been saved yet. The database assigns the real id.
@@ -77,6 +117,11 @@ class Task {
     DateTime? startsAt,
     DateTime? endsAt,
     bool remind = true,
+    String startMessage = '',
+    String endMessage = '',
+    int earlyMinutes = 0,
+    AlertStyle alertStyle = AlertStyle.sound,
+    AlertSound alertSound = AlertSound.standard,
   }) => Task(
     id: '',
     title: title,
@@ -90,6 +135,11 @@ class Task {
     startsAt: startsAt,
     endsAt: endsAt,
     remind: remind,
+    startMessage: startMessage,
+    endMessage: endMessage,
+    earlyMinutes: earlyMinutes,
+    alertStyle: alertStyle,
+    alertSound: alertSound,
   );
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -111,6 +161,11 @@ class Task {
       startsAt: date('starts_at'),
       endsAt: date('ends_at'),
       remind: json['remind'] as bool? ?? true,
+      startMessage: json['start_message'] as String? ?? '',
+      endMessage: json['end_message'] as String? ?? '',
+      earlyMinutes: (json['early_minutes'] as num?)?.toInt() ?? 0,
+      alertStyle: AlertStyle.parse(json['alert_style'] as String?),
+      alertSound: AlertSound.parse(json['alert_sound'] as String?),
       tagIds: [
         for (final link in links)
           (link as Map<String, dynamic>)['tag_id'] as String,
@@ -139,6 +194,15 @@ class Task {
   /// Whether to notify when the time slot starts and ends.
   final bool remind;
 
+  /// Custom notification text; empty means use the standard wording.
+  final String startMessage;
+  final String endMessage;
+
+  /// Minutes before [startsAt] for an extra heads-up; 0 means none.
+  final int earlyMinutes;
+  final AlertStyle alertStyle;
+  final AlertSound alertSound;
+
   bool get isSubtask => parentId != null;
 
   bool get hasTimeSlot => startsAt != null && endsAt != null;
@@ -162,6 +226,11 @@ class Task {
     'starts_at': startsAt?.toUtc().toIso8601String(),
     'ends_at': endsAt?.toUtc().toIso8601String(),
     'remind': remind,
+    'start_message': startMessage,
+    'end_message': endMessage,
+    'early_minutes': earlyMinutes,
+    'alert_style': alertStyle.name,
+    'alert_sound': alertSound.key,
   };
 
   /// Pass `null` for [projectId], [dueAt], [startsAt] or [endsAt] to clear them.
@@ -171,6 +240,11 @@ class Task {
     Priority? priority,
     bool? done,
     bool? remind,
+    String? startMessage,
+    String? endMessage,
+    int? earlyMinutes,
+    AlertStyle? alertStyle,
+    AlertSound? alertSound,
     List<String>? tagIds,
     Object? projectId = _keep,
     Object? dueAt = _keep,
@@ -186,6 +260,11 @@ class Task {
     priority: priority ?? this.priority,
     done: done ?? this.done,
     remind: remind ?? this.remind,
+    startMessage: startMessage ?? this.startMessage,
+    endMessage: endMessage ?? this.endMessage,
+    earlyMinutes: earlyMinutes ?? this.earlyMinutes,
+    alertStyle: alertStyle ?? this.alertStyle,
+    alertSound: alertSound ?? this.alertSound,
     tagIds: tagIds ?? this.tagIds,
     startsAt: identical(startsAt, _keep)
         ? this.startsAt

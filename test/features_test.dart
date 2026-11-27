@@ -257,9 +257,92 @@ class _FakeReminders implements ReminderScheduler {
 
   @override
   Future<void> sync(List<Task> tasks) async => syncs.add([...tasks]);
+
+  final previews = <(AlertStyle, AlertSound)>[];
+
+  @override
+  Future<bool> preview(AlertStyle style, AlertSound sound) async {
+    previews.add((style, sound));
+    return true;
+  }
 }
 
 void timeSlotTests() {
+  group('planAlerts', () {
+    final now = DateTime(2026, 11, 27, 8);
+    final start = DateTime(2026, 11, 27, 9);
+    final end = DateTime(2026, 11, 27, 10);
+    Task gym() => Task(
+      id: 'gym',
+      title: 'Gym',
+      createdAt: now,
+      startsAt: start,
+      endsAt: end,
+    );
+
+    test('default task gets a start and an end alert', () {
+      final alerts = planAlerts([gym()], now);
+      expect(alerts.map((a) => a.at), [start, end]);
+      expect(alerts[0].title, '▶ Time to start: Gym');
+      expect(alerts[1].title, "⏹ Time's up: Gym");
+      expect(alerts.map((a) => a.id).toSet(), hasLength(2));
+      expect(alerts[0].style, AlertStyle.sound);
+      expect(alerts[0].sound, AlertSound.standard);
+    });
+
+    test('early reminder, custom messages, style and sound are used', () {
+      final task = gym().copyWith(
+        earlyMinutes: 15,
+        startMessage: ' Leave for the gym now! ',
+        endMessage: 'Stop and stretch',
+        alertStyle: AlertStyle.vibrate,
+        alertSound: AlertSound.bell,
+      );
+      final alerts = planAlerts([task], now);
+      expect(alerts.map((a) => a.at), [
+        start.subtract(const Duration(minutes: 15)),
+        start,
+        end,
+      ]);
+      expect(alerts[0].title, '⏰ In 15 min: Gym');
+      expect(alerts[1].title, 'Leave for the gym now!');
+      expect(alerts[1].body, startsWith('Gym'));
+      expect(alerts[2].title, 'Stop and stretch');
+      expect(alerts.map((a) => a.id).toSet(), hasLength(3));
+      expect(alerts.every((a) => a.style == AlertStyle.vibrate), isTrue);
+      expect(alerts.every((a) => a.sound == AlertSound.bell), isTrue);
+    });
+
+    test('past alerts, finished tasks and muted tasks are skipped', () {
+      final midway = start.add(const Duration(minutes: 30));
+      final early = gym().copyWith(earlyMinutes: 30);
+      expect(planAlerts([early], midway).map((a) => a.at), [end]);
+      expect(planAlerts([gym().copyWith(done: true)], now), isEmpty);
+      expect(planAlerts([gym().copyWith(remind: false)], now), isEmpty);
+      expect(planAlerts([gym()], end), isEmpty);
+    });
+
+    test('alert preferences are saved to and read from the database row', () {
+      final row = gym()
+          .copyWith(
+            earlyMinutes: 10,
+            startMessage: 'Go',
+            alertStyle: AlertStyle.silent,
+            alertSound: AlertSound.digital,
+          )
+          .toRow();
+      expect(row['early_minutes'], 10);
+      expect(row['start_message'], 'Go');
+      expect(row['end_message'], '');
+      expect(row['alert_style'], 'silent');
+      expect(row['alert_sound'], 'digital');
+      expect(AlertStyle.parse('vibrate'), AlertStyle.vibrate);
+      expect(AlertStyle.parse('nonsense'), AlertStyle.sound);
+      expect(AlertSound.parse('default'), AlertSound.standard);
+      expect(AlertSound.parse(null), AlertSound.standard);
+    });
+  });
+
   test('a task is in progress only inside its time slot', () {
     final start = DateTime(2026, 11, 27, 9);
     final t = Task(

@@ -38,6 +38,11 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   DateTime? _startsAt;
   DateTime? _endsAt;
   late bool _remind;
+  late final TextEditingController _startMessage;
+  late final TextEditingController _endMessage;
+  late int _earlyMinutes;
+  late AlertStyle _alertStyle;
+  late AlertSound _alertSound;
   DateTime? _dueAt;
   String? _projectId;
   late Set<String> _tagIds;
@@ -57,6 +62,11 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _startsAt = t?.startsAt;
     _endsAt = t?.endsAt;
     _remind = t?.remind ?? true;
+    _startMessage = TextEditingController(text: t?.startMessage ?? '');
+    _endMessage = TextEditingController(text: t?.endMessage ?? '');
+    _earlyMinutes = t?.earlyMinutes ?? 0;
+    _alertStyle = t?.alertStyle ?? AlertStyle.sound;
+    _alertSound = t?.alertSound ?? AlertSound.standard;
     if (t != null) {
       _dueAt = t.dueAt;
       _projectId = t.projectId;
@@ -81,7 +91,24 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _title.dispose();
     _notes.dispose();
     _newSubtask.dispose();
+    _startMessage.dispose();
+    _endMessage.dispose();
     super.dispose();
+  }
+
+  /// Shows a sample notification with the chosen style and sound.
+  Future<void> _testAlert() async {
+    final ok = await store.reminders.preview(_alertStyle, _alertSound);
+    if (ok || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Test alerts work in the phone app, with notifications allowed.',
+          ),
+        ),
+      );
   }
 
   Future<void> _save() async {
@@ -108,6 +135,11 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           startsAt: _startsAt,
           endsAt: _endsAt,
           remind: _remind,
+          startMessage: _startMessage.text.trim(),
+          endMessage: _endMessage.text.trim(),
+          earlyMinutes: _earlyMinutes,
+          alertStyle: _alertStyle,
+          alertSound: _alertSound,
         ),
       );
       if (saved == null) {
@@ -126,6 +158,11 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           startsAt: _startsAt,
           endsAt: _endsAt,
           remind: _remind,
+          startMessage: _startMessage.text.trim(),
+          endMessage: _endMessage.text.trim(),
+          earlyMinutes: _earlyMinutes,
+          alertStyle: _alertStyle,
+          alertSound: _alertSound,
         ),
       );
     }
@@ -291,6 +328,21 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                 }),
                 onRemindChanged: (v) => setState(() => _remind = v),
               ),
+              if (_startsAt != null && _remind) ...[
+                const SizedBox(height: 20),
+                _Section('Notification'),
+                _AlertOptions(
+                  earlyMinutes: _earlyMinutes,
+                  style: _alertStyle,
+                  sound: _alertSound,
+                  startMessage: _startMessage,
+                  endMessage: _endMessage,
+                  onEarlyChanged: (v) => setState(() => _earlyMinutes = v),
+                  onStyleChanged: (v) => setState(() => _alertStyle = v),
+                  onSoundChanged: (v) => setState(() => _alertSound = v),
+                  onTest: _testAlert,
+                ),
+              ],
               const SizedBox(height: 20),
               _Section('Project'),
               DropdownButtonFormField<String?>(
@@ -620,6 +672,134 @@ class _TimeSlotEditor extends StatelessWidget {
           onPressed: () => onChanged(null, null),
           icon: const Icon(Icons.close_rounded, size: 18),
           label: const Text('Remove time'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Per-task notification choices: early heads-up, how it alerts, which
+/// sound it plays, and custom wording.
+class _AlertOptions extends StatelessWidget {
+  const _AlertOptions({
+    required this.earlyMinutes,
+    required this.style,
+    required this.sound,
+    required this.startMessage,
+    required this.endMessage,
+    required this.onEarlyChanged,
+    required this.onStyleChanged,
+    required this.onSoundChanged,
+    required this.onTest,
+  });
+
+  final int earlyMinutes;
+  final AlertStyle style;
+  final AlertSound sound;
+  final TextEditingController startMessage;
+  final TextEditingController endMessage;
+  final ValueChanged<int> onEarlyChanged;
+  final ValueChanged<AlertStyle> onStyleChanged;
+  final ValueChanged<AlertSound> onSoundChanged;
+  final VoidCallback onTest;
+
+  static String _earlyLabel(int minutes) => switch (minutes) {
+    0 => 'No early reminder',
+    60 => '1 hour before it starts',
+    _ => '$minutes minutes before it starts',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final testButton = OutlinedButton.icon(
+      onPressed: onTest,
+      icon: const Icon(Icons.play_arrow_rounded),
+      label: const Text('Test'),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<int>(
+          initialValue: earlyMinutes,
+          decoration: const InputDecoration(
+            labelText: 'Early reminder',
+            prefixIcon: Icon(Icons.alarm_rounded),
+          ),
+          items: [
+            for (final m in earlyReminderOptions)
+              DropdownMenuItem(value: m, child: Text(_earlyLabel(m))),
+          ],
+          onChanged: (v) => onEarlyChanged(v ?? 0),
+        ),
+        const SizedBox(height: 14),
+        SegmentedButton<AlertStyle>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: AlertStyle.sound,
+              label: Text('Sound'),
+              icon: Icon(Icons.volume_up_rounded),
+            ),
+            ButtonSegment(
+              value: AlertStyle.vibrate,
+              label: Text('Vibrate'),
+              icon: Icon(Icons.vibration_rounded),
+            ),
+            ButtonSegment(
+              value: AlertStyle.silent,
+              label: Text('Silent'),
+              icon: Icon(Icons.notifications_paused_outlined),
+            ),
+          ],
+          selected: {style},
+          onSelectionChanged: (s) => onStyleChanged(s.first),
+        ),
+        const SizedBox(height: 6),
+        Text(style.description, style: theme.textTheme.bodySmall),
+        const SizedBox(height: 12),
+        if (style == AlertStyle.sound)
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<AlertSound>(
+                  initialValue: sound,
+                  decoration: const InputDecoration(
+                    labelText: 'Alert sound',
+                    prefixIcon: Icon(Icons.music_note_rounded),
+                  ),
+                  items: [
+                    for (final s in AlertSound.values)
+                      DropdownMenuItem(value: s, child: Text(s.label)),
+                  ],
+                  onChanged: (v) => onSoundChanged(v ?? AlertSound.standard),
+                ),
+              ),
+              const SizedBox(width: 10),
+              testButton,
+            ],
+          )
+        else
+          testButton,
+        const SizedBox(height: 14),
+        TextField(
+          controller: startMessage,
+          maxLength: 200,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Message when it starts (optional)',
+            hintText: 'e.g. Leave for the gym now!',
+          ),
+        ),
+        TextField(
+          controller: endMessage,
+          maxLength: 200,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Message when it ends (optional)',
+            hintText: 'e.g. Stop and stretch',
+          ),
         ),
       ],
     );
