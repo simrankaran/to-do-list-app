@@ -46,6 +46,7 @@ class Connection {
     required this.id,
     required this.person,
     required this.status,
+    this.requestedEmail,
   });
 
   /// Works out which side of a `friendships` row is the other person.
@@ -60,6 +61,7 @@ class Connection {
     final otherId = iAsked ? addressee : requester;
     return Connection(
       id: row['id'] as String,
+      requestedEmail: row['requested_email'] as String?,
       person: profiles[otherId] ?? Profile(id: otherId),
       status: row['status'] == 'accepted'
           ? LinkStatus.accepted
@@ -70,6 +72,15 @@ class Connection {
   final String id;
   final Profile person;
   final LinkStatus status;
+
+  /// The email I typed when asking. Shown while waiting for an answer,
+  /// because the other person's profile stays hidden until they accept.
+  final String? requestedEmail;
+
+  /// What to call the other person in lists.
+  String get label => status == LinkStatus.outgoing
+      ? (requestedEmail ?? person.name)
+      : person.name;
 }
 
 class ChatMessage {

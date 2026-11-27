@@ -378,8 +378,12 @@ class _PeoplePageState extends State<PeoplePage> {
             if (outgoing.isNotEmpty) header('Waiting for a reply'),
             for (final c in outgoing)
               ListTile(
-                leading: avatar(c),
-                title: Text(c.person.name, overflow: TextOverflow.ellipsis),
+                // Their profile stays hidden until they accept.
+                leading: const CircleAvatar(
+                  radius: 22,
+                  child: Icon(Icons.hourglass_top_rounded),
+                ),
+                title: Text(c.label, overflow: TextOverflow.ellipsis),
                 subtitle: const Text('Request sent'),
                 trailing: TextButton(
                   onPressed: () => _run(() => social.removeConnection(c.id)),

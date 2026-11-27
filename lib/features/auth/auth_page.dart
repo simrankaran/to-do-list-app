@@ -243,9 +243,14 @@ class _AuthPageState extends State<AuthPage> {
                                     setState(() => _obscure = !_obscure),
                               ),
                             ),
-                            validator: (v) => v != null && v.length >= 6
-                                ? null
-                                : 'At least 6 characters',
+                            // New passwords must be longer; existing shorter
+                            // ones can still sign in.
+                            validator: (v) {
+                              final min = _signUp ? 8 : 6;
+                              return v != null && v.length >= min
+                                  ? null
+                                  : 'At least $min characters';
+                            },
                             onFieldSubmitted: (_) => _submit(),
                           ),
                           if (_error != null) ...[
