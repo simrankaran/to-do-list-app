@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.example.my_app"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_local_notifications 23 and androidx.core 1.19 need API 37 to
+    // compile against. This doesn't change which devices can install the app.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
