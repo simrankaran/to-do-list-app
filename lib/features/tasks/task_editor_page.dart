@@ -351,6 +351,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                 endsAt: _endsAt,
                 remind: _remind,
                 today: today,
+                defaultDay: _dueAt,
                 onChanged: (start, end) => setState(() {
                   _startsAt = start;
                   _endsAt = end;
@@ -516,12 +517,16 @@ class _TimeSlotEditor extends StatelessWidget {
     required this.today,
     required this.onChanged,
     required this.onRemindChanged,
+    this.defaultDay,
   });
 
   final DateTime? startsAt;
   final DateTime? endsAt;
   final bool remind;
   final DateTime today;
+
+  /// The task's due day, used for a new time slot.
+  final DateTime? defaultDay;
   final void Function(DateTime? start, DateTime? end) onChanged;
   final ValueChanged<bool> onRemindChanged;
 
@@ -539,54 +544,51 @@ class _TimeSlotEditor extends StatelessWidget {
     return m == 0 ? '$h h' : '$h h $m';
   }
 
-  Future<void> _pickStart(BuildContext context) async {
+  /// Starts a one-hour slot at the next full hour today, or at 9 AM on the
+  /// task's due day when that is another day.
+  void _addSlot() {
+    final day = defaultDay == null ? today : dateOnly(defaultDay!);
+    final now = DateTime.now();
+    final start = day == dateOnly(now)
+        ? DateTime(now.year, now.month, now.day, now.hour + 1)
+        : DateTime(day.year, day.month, day.day, 9);
+    onChanged(start, start.add(const Duration(hours: 1)));
+  }
+
+  /// Moves the slot to another day, keeping its times.
+  Future<void> _pickDay(BuildContext context) async {
+    final start = startsAt!;
     final date = await showDatePicker(
       context: context,
-      initialDate: startsAt ?? today,
+      initialDate: start,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (date == null || !context.mounted) return;
-    final nextHour = DateTime.now().add(const Duration(hours: 1));
-    final time = await showTimePicker(
-      context: context,
-      initialTime: startsAt != null
-          ? TimeOfDay.fromDateTime(startsAt!)
-          : TimeOfDay(hour: nextHour.hour, minute: 0),
-      helpText: 'Start time',
-    );
-    if (time == null) return;
-    final start = DateTime(
+    if (date == null) return;
+    final moved = DateTime(
       date.year,
       date.month,
       date.day,
-      time.hour,
-      time.minute,
+      start.hour,
+      start.minute,
     );
-    // Keep the current length when moving the start; default to one hour.
-    final length = startsAt != null && endsAt != null
-        ? endsAt!.difference(startsAt!)
-        : const Duration(hours: 1);
-    onChanged(start, start.add(length));
+    onChanged(moved, moved.add(_length));
   }
 
-  Future<void> _pickEnd(BuildContext context) async {
+  Duration get _length => startsAt != null && endsAt != null
+      ? endsAt!.difference(startsAt!)
+      : const Duration(hours: 1);
+
+  /// A new start time keeps the slot's length.
+  void _setStart(int hour, int minute) {
+    final s = startsAt!;
+    final start = DateTime(s.year, s.month, s.day, hour, minute);
+    onChanged(start, start.add(_length));
+  }
+
+  void _setEnd(int hour, int minute) {
     final start = startsAt!;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        endsAt ?? start.add(const Duration(hours: 1)),
-      ),
-      helpText: 'End time',
-    );
-    if (time == null) return;
-    var end = DateTime(
-      start.year,
-      start.month,
-      start.day,
-      time.hour,
-      time.minute,
-    );
+    var end = DateTime(start.year, start.month, start.day, hour, minute);
     // An end time at or before the start means it runs past midnight.
     if (!end.isAfter(start)) end = end.add(const Duration(days: 1));
     onChanged(start, end);
@@ -601,7 +603,7 @@ class _TimeSlotEditor extends StatelessWidget {
       return Align(
         alignment: Alignment.centerLeft,
         child: OutlinedButton.icon(
-          onPressed: () => _pickStart(context),
+          onPressed: _addSlot,
           icon: const Icon(Icons.schedule_rounded),
           label: const Text('Set start and end time'),
         ),
@@ -613,62 +615,32 @@ class _TimeSlotEditor extends StatelessWidget {
     final length = end.difference(start);
     final time = DateFormat.jm();
 
-    Widget box(String label, String main, String sub, VoidCallback onTap) =>
-        Expanded(
-          child: Material(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(14),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(main, style: theme.textTheme.titleLarge),
-                    Text(sub, style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
+    final caption = theme.textTheme.labelLarge?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            box(
-              'Starts',
-              time.format(start),
-              formatDue(start, today),
-              () => _pickStart(context),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(
-                Icons.arrow_forward_rounded,
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            box(
-              'Ends',
-              time.format(end),
-              dateOnly(end) == dateOnly(start)
-                  ? _label(length)
-                  : 'next day · ${_label(length)}',
-              () => _pickEnd(context),
-            ),
-          ],
+        OutlinedButton.icon(
+          onPressed: () => _pickDay(context),
+          icon: const Icon(Icons.calendar_month_rounded, size: 18),
+          label: Text('Day: ${formatDue(start, today)}'),
+        ),
+        const SizedBox(height: 12),
+        Text('Starts', style: caption),
+        const SizedBox(height: 6),
+        _TimeDropdowns(time: start, onChanged: _setStart),
+        const SizedBox(height: 12),
+        Text('Ends', style: caption),
+        const SizedBox(height: 6),
+        _TimeDropdowns(time: end, onChanged: _setEnd),
+        const SizedBox(height: 8),
+        Text(
+          dateOnly(end) == dateOnly(start)
+              ? 'Length: ${_label(length)}'
+              : 'Length: ${_label(length)} · ends next day',
+          style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -703,6 +675,81 @@ class _TimeSlotEditor extends StatelessWidget {
           onPressed: () => onChanged(null, null),
           icon: const Icon(Icons.close_rounded, size: 18),
           label: const Text('Remove time'),
+        ),
+      ],
+    );
+  }
+}
+
+/// A time of day chosen with three dropdowns: hour, minute and AM/PM.
+class _TimeDropdowns extends StatelessWidget {
+  const _TimeDropdowns({required this.time, required this.onChanged});
+
+  final DateTime time;
+
+  /// Called with the chosen hour (0 to 23) and minute.
+  final void Function(int hour, int minute) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final hour12 = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final isPm = time.hour >= 12;
+    // Five-minute steps, plus the current minute if it falls between them.
+    final minutes = {for (var m = 0; m < 60; m += 5) m, time.minute}.toList()
+      ..sort();
+
+    int to24(int h12, bool pm) => (h12 % 12) + (pm ? 12 : 0);
+
+    Widget dropdown<T>({
+      required String label,
+      required T value,
+      required List<(T, String)> options,
+      required ValueChanged<T> onPicked,
+    }) => Expanded(
+      child: DropdownButtonFormField<T>(
+        // The value also changes from outside (duration chips), so rebuild.
+        key: ValueKey('$label-$value'),
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
+        ),
+        items: [
+          for (final (v, text) in options)
+            DropdownMenuItem(value: v, child: Text(text)),
+        ],
+        onChanged: (v) {
+          if (v != null) onPicked(v);
+        },
+      ),
+    );
+
+    return Row(
+      children: [
+        dropdown<int>(
+          label: 'Hour',
+          value: hour12,
+          options: [for (var h = 1; h <= 12; h++) (h, '$h')],
+          onPicked: (h) => onChanged(to24(h, isPm), time.minute),
+        ),
+        const SizedBox(width: 8),
+        dropdown<int>(
+          label: 'Minute',
+          value: time.minute,
+          options: [for (final m in minutes) (m, m.toString().padLeft(2, '0'))],
+          onPicked: (m) => onChanged(time.hour, m),
+        ),
+        const SizedBox(width: 8),
+        dropdown<bool>(
+          label: 'AM/PM',
+          value: isPm,
+          options: const [(false, 'AM'), (true, 'PM')],
+          onPicked: (pm) => onChanged(to24(hour12, pm), time.minute),
         ),
       ],
     );
