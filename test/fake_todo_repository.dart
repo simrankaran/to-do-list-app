@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:my_app/data/models.dart';
 import 'package:my_app/data/todo_repository.dart';
 
@@ -99,4 +101,43 @@ class FakeTodoRepository implements TodoRepository {
   Future<void> restoreTasks(List<Task> restored) => _run(() {
     tasks.addAll(restored);
   });
+
+  final attachments = <Attachment>[];
+
+  @override
+  Future<List<Attachment>> fetchAttachments() => _run(() => [...attachments]);
+
+  @override
+  Future<Attachment> addAttachment(
+    String taskId,
+    Uint8List bytes,
+    String name,
+    String mimeType,
+  ) => _run(() {
+    final a = Attachment(
+      id: _newId(),
+      taskId: taskId,
+      name: name,
+      path: 'fake/$taskId/$name',
+      mimeType: mimeType,
+      sizeBytes: bytes.length,
+      createdAt: DateTime.now(),
+    );
+    attachments.add(a);
+    return a;
+  });
+
+  @override
+  Future<void> deleteAttachment(Attachment attachment) => _run(() {
+    attachments.removeWhere((a) => a.id == attachment.id);
+  });
+
+  @override
+  Future<void> restoreAttachments(List<Attachment> restored) => _run(() {
+    attachments.addAll(restored);
+  });
+
+  @override
+  Future<String> attachmentUrl(Attachment attachment) =>
+      _run(() => 'https://example.com/${attachment.path}');
 }

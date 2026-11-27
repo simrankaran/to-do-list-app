@@ -55,6 +55,8 @@ class TodoStore extends ChangeNotifier {
   List<Project> projects = [];
   List<Tag> tags = [];
   List<Task> tasks = [];
+  List<Attachment> attachments = [];
+  final List<Attachment> _deletedAttachments = [];
   bool loading = true;
   String? loadError;
 
@@ -118,7 +120,9 @@ class TodoStore extends ChangeNotifier {
         _repo.fetchProjects(),
         _repo.fetchTags(),
         _repo.fetchTasks(),
+        _repo.fetchAttachments(),
       ]);
+      attachments = results[3].cast<Attachment>();
       projects = results[0].cast<Project>();
       tags = results[1].cast<Tag>();
       tasks = results[2].cast<Task>();
@@ -259,6 +263,12 @@ class TodoStore extends ChangeNotifier {
     final ids = {for (final t in removed) t.id};
     final before = tasks;
     tasks = tasks.where((t) => !ids.contains(t.id)).toList();
+    // The database deletes attachment records together with their task;
+    // keep them so Undo can bring them back.
+    _deletedAttachments.addAll(
+      attachments.where((a) => ids.contains(a.taskId)),
+    );
+    attachments = attachments.where((a) => !ids.contains(a.taskId)).toList();
     notifyListeners();
     final ok = await _attempt(() async {
       await _repo.deleteTask(task.id);
@@ -284,6 +294,15 @@ class TodoStore extends ChangeNotifier {
     ];
     await _repo.restoreTasks(cleaned);
     tasks = [...tasks, ...cleaned];
+    final ids = {for (final t in cleaned) t.id};
+    final files = _deletedAttachments
+        .where((a) => ids.contains(a.taskId))
+        .toList();
+    _deletedAttachments.removeWhere((a) => ids.contains(a.taskId));
+    if (files.isNotEmpty) {
+      await _repo.restoreAttachments(files);
+      attachments = [...attachments, ...files];
+    }
     notifyListeners();
   });
 
@@ -342,6 +361,110 @@ class TodoStore extends ChangeNotifier {
     if (_view == TodoView(ViewKind.tag, id)) _view = TodoView.inbox;
     notifyListeners();
   });
+
+  // Attachments --------------------------------------------------------------
+
+  List<Attachment> attachmentsOf(String taskId) =>
+      attachments.where((a) => a.taskId == taskId).toList();
+
+  Future<Attachment?> addAttachment(
+    String taskId,
+    Uint8List bytes,
+    String name,
+    String mimeType,
+  ) => _attempt(() async {
+    final a = await _repo.addAttachment(taskId, bytes, name, mimeType);
+    attachments = [...attachments, a];
+    notifyListeners();
+    return a;
+  });
+
+  Future<void> deleteAttachment(Attachment attachment) => _attempt(() async {
+    await _repo.deleteAttachment(attachment);
+    attachments = attachments.where((a) => a.id != attachment.id).toList();
+    notifyListeners();
+  });
+
+  Future<String?> attachmentUrl(Attachment attachment) =>
+      _attempt(() => _repo.attachmentUrl(attachment));
+
+  // Stats --------------------------------------------------------------------
+
+  /// Completed top-level tasks per local calendar day.
+  Map<DateTime, int> completionsByDay() {
+    final counts = <DateTime, int>{};
+    for (final t in tasks) {
+      if (t.isSubtask || !t.done || t.completedAt == null) continue;
+      final day = dateOnly(t.completedAt!);
+      counts[day] = (counts[day] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  /// Completions for each of the last [days] days, oldest first.
+  List<({DateTime day, int count})> recentCompletions([int days = 7]) {
+    final counts = completionsByDay();
+    return [
+      for (var i = days - 1; i >= 0; i--)
+        (
+          day: today.subtract(Duration(days: i)),
+          count: counts[today.subtract(Duration(days: i))] ?? 0,
+        ),
+    ];
+  }
+
+  /// Days in a row, up to today, with at least one completed task. A streak
+  /// still counts if today has nothing yet but yesterday did.
+  int get currentStreak {
+    final counts = completionsByDay();
+    var day = today;
+    if (!counts.containsKey(day)) day = day.subtract(const Duration(days: 1));
+    var streak = 0;
+    while (counts.containsKey(day)) {
+      streak++;
+      day = day.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  int get bestStreak {
+    final days = completionsByDay().keys.toList()..sort();
+    var best = 0, run = 0;
+    DateTime? prev;
+    for (final d in days) {
+      run = prev != null && d.difference(prev).inDays == 1 ? run + 1 : 1;
+      if (run > best) best = run;
+      prev = d;
+    }
+    return best;
+  }
+
+  // Calendar -----------------------------------------------------------------
+
+  /// Top-level tasks due on [day].
+  List<Task> tasksDueOn(DateTime day) {
+    final d = dateOnly(day);
+    return tasks
+        .where(
+          (t) => !t.isSubtask && t.dueAt != null && dateOnly(t.dueAt!) == d,
+        )
+        .toList()
+      ..sort((a, b) {
+        if (a.done != b.done) return a.done ? 1 : -1;
+        return b.priority.index.compareTo(a.priority.index);
+      });
+  }
+
+  /// Open top-level tasks due on each day, for calendar dots.
+  Map<DateTime, int> openDueCounts() {
+    final counts = <DateTime, int>{};
+    for (final t in tasks) {
+      if (t.isSubtask || t.done || t.dueAt == null) continue;
+      final d = dateOnly(t.dueAt!);
+      counts[d] = (counts[d] ?? 0) + 1;
+    }
+    return counts;
+  }
 
   // Helpers ------------------------------------------------------------------
 

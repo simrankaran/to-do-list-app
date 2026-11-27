@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../state/todo_store.dart';
+import 'task_tile.dart' show formatDue;
 
 /// Bottom sheet for adding a task quickly. "More details" hands the typed
 /// title to [onMoreDetails] to open the full editor.
@@ -9,19 +10,31 @@ Future<void> showQuickAddSheet(
   BuildContext context, {
   required TodoStore store,
   required void Function(String title) onMoreDetails,
+  DateTime? dueAt,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _QuickAddSheet(store: store, onMoreDetails: onMoreDetails),
+    builder: (_) => _QuickAddSheet(
+      store: store,
+      onMoreDetails: onMoreDetails,
+      dueAt: dueAt,
+    ),
   );
 }
 
 class _QuickAddSheet extends StatefulWidget {
-  const _QuickAddSheet({required this.store, required this.onMoreDetails});
+  const _QuickAddSheet({
+    required this.store,
+    required this.onMoreDetails,
+    this.dueAt,
+  });
 
   final TodoStore store;
   final void Function(String title) onMoreDetails;
+
+  /// Due date for the new task (from the calendar), instead of the view's.
+  final DateTime? dueAt;
 
   @override
   State<_QuickAddSheet> createState() => _QuickAddSheetState();
@@ -41,7 +54,9 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
     final title = _controller.text.trim();
     if (title.isEmpty || _saving) return;
     setState(() => _saving = true);
-    final saved = await widget.store.addTask(widget.store.draftForView(title));
+    var draft = widget.store.draftForView(title);
+    if (widget.dueAt != null) draft = draft.copyWith(dueAt: widget.dueAt);
+    final saved = await widget.store.addTask(draft);
     if (!mounted) return;
     if (saved != null) {
       HapticFeedback.lightImpact();
@@ -78,9 +93,11 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('New task', style: theme.textTheme.titleLarge),
-          if (where != null)
+          if (widget.dueAt != null || where != null)
             Text(
-              'Adding to $where',
+              widget.dueAt != null
+                  ? 'Due ${formatDue(widget.dueAt!, store.today)}'
+                  : 'Adding to $where',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

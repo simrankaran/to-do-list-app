@@ -166,3 +166,47 @@ class Task {
 }
 
 DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// A photo or PDF saved on a task.
+class Attachment {
+  const Attachment({
+    required this.id,
+    required this.taskId,
+    required this.name,
+    required this.path,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.createdAt,
+  });
+
+  factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
+    id: json['id'] as String,
+    taskId: json['task_id'] as String,
+    name: json['name'] as String,
+    path: json['path'] as String,
+    mimeType: json['mime_type'] as String,
+    sizeBytes: (json['size_bytes'] as num).toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+  );
+
+  final String id;
+  final String taskId;
+  final String name;
+
+  /// Location in the private `attachments` storage bucket.
+  final String path;
+  final String mimeType;
+  final int sizeBytes;
+  final DateTime createdAt;
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isPdf => mimeType == 'application/pdf';
+
+  String get sizeLabel {
+    if (sizeBytes < 1024) return '$sizeBytes B';
+    if (sizeBytes < 1024 * 1024) {
+      return '${(sizeBytes / 1024).toStringAsFixed(0)} KB';
+    }
+    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}

@@ -114,7 +114,7 @@ class _HomePageState extends State<HomePage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _openEditor([Task? task, String? initialTitle]) {
+  void _openEditor([Task? task, String? initialTitle, DateTime? initialDueAt]) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: task == null,
@@ -122,6 +122,7 @@ class _HomePageState extends State<HomePage> {
           store: _store,
           task: task,
           initialTitle: initialTitle,
+          initialDueAt: initialDueAt,
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/models.dart';
 import '../../state/todo_store.dart';
 import '../common/dialogs.dart';
+import 'attachments_section.dart';
 import 'task_tile.dart';
 
 /// Creates a task (when [task] is null) or edits an existing one.
@@ -12,10 +13,14 @@ class TaskEditorPage extends StatefulWidget {
     required this.store,
     this.task,
     this.initialTitle,
+    this.initialDueAt,
   });
 
   /// Pre-filled title for a new task (from the quick-add sheet).
   final String? initialTitle;
+
+  /// Pre-filled due date for a new task (from the calendar).
+  final DateTime? initialDueAt;
 
   final TodoStore store;
   final Task? task;
@@ -54,11 +59,13 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       final v = store.view;
       _projectId = v.kind == ViewKind.project ? v.id : null;
       _tagIds = {if (v.kind == ViewKind.tag) v.id!};
-      _dueAt = switch (v.kind) {
-        ViewKind.today => store.today,
-        ViewKind.upcoming => store.today.add(const Duration(days: 1)),
-        _ => null,
-      };
+      _dueAt =
+          widget.initialDueAt ??
+          switch (v.kind) {
+            ViewKind.today => store.today,
+            ViewKind.upcoming => store.today.add(const Duration(days: 1)),
+            _ => null,
+          };
     }
   }
 
@@ -306,6 +313,15 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                       ),
                   ],
                 ),
+              const SizedBox(height: 20),
+              _Section('Photos & PDFs'),
+              if (_isNew)
+                Text(
+                  'Save the task first, then attach photos or PDFs.',
+                  style: theme.textTheme.bodySmall,
+                )
+              else
+                AttachmentsSection(store: store, task: widget.task!),
               if (widget.task?.isSubtask != true) ...[
                 const SizedBox(height: 20),
                 _Section('Subtasks'),

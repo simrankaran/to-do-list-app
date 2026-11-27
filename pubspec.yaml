@@ -38,6 +38,8 @@ dependencies:
   supabase_flutter: ^2.18.3
   intl: ^0.20.3
   image_picker: ^1.2.4
+  file_picker: ^13.4.1
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -49,6 +51,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -91,3 +95,30 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# App icon: run `dart run flutter_launcher_icons`
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/branding/icon.png"
+  min_sdk_android: 24
+  adaptive_icon_background: "assets/branding/icon_background.png"
+  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_foreground_inset: 16
+  web:
+    generate: true
+    image_path: "assets/branding/icon.png"
+    background_color: "#5B5BD6"
+    theme_color: "#5B5BD6"
+
+# Launch screen: run `dart run flutter_native_splash:create`
+flutter_native_splash:
+  color: "#FFFFFF"
+  color_dark: "#000000"
+  image: "assets/branding/splash.png"
+  android_12:
+    color: "#FFFFFF"
+    color_dark: "#000000"
+    image: "assets/branding/splash.png"
+  web: false

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'models.dart';
 
 /// Error with a message that is safe to show to the user.
@@ -35,4 +37,23 @@ abstract interface class TodoRepository {
 
   /// Re-inserts previously deleted tasks with their original ids (for undo).
   Future<void> restoreTasks(List<Task> tasks);
+
+  Future<List<Attachment>> fetchAttachments();
+
+  /// Uploads a file and records it on [taskId].
+  Future<Attachment> addAttachment(
+    String taskId,
+    Uint8List bytes,
+    String name,
+    String mimeType,
+  );
+
+  Future<void> deleteAttachment(Attachment attachment);
+
+  /// Re-creates attachment records removed along with a deleted task (undo).
+  /// The files themselves are still in storage.
+  Future<void> restoreAttachments(List<Attachment> attachments);
+
+  /// A short-lived link for viewing or downloading the file.
+  Future<String> attachmentUrl(Attachment attachment);
 }

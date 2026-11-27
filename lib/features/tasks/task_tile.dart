@@ -66,6 +66,12 @@ class TaskTile extends StatelessWidget {
           text: '${subtasks.where((s) => s.done).length}/${subtasks.length}',
           color: scheme.onSurfaceVariant,
         ),
+      if (store.attachmentsOf(task.id) case final files when files.isNotEmpty)
+        _Badge(
+          icon: Icons.attach_file_rounded,
+          text: '${files.length}',
+          color: scheme.onSurfaceVariant,
+        ),
       if (task.notes.trim().isNotEmpty)
         _Badge(
           icon: Icons.sticky_note_2_outlined,

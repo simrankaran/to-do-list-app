@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_app/data/models.dart';
 import 'package:my_app/state/todo_store.dart';
@@ -160,4 +162,87 @@ void main() {
     await store.deleteTag(tag.id);
     expect(store.tasks.single.tagIds, isEmpty);
   });
+  group('stats', () {
+    Task doneOn(String id, DateTime day) => Task(
+      id: id,
+      title: id,
+      createdAt: day,
+      done: true,
+      completedAt: day.add(const Duration(hours: 9)),
+    );
+
+    test('streak counts consecutive days ending today or yesterday', () async {
+      repo.tasks.addAll([
+        doneOn('a', today),
+        doneOn('b', today.subtract(const Duration(days: 1))),
+        doneOn('c', today.subtract(const Duration(days: 2))),
+        // gap on day 3
+        doneOn('d', today.subtract(const Duration(days: 4))),
+        doneOn('e', today.subtract(const Duration(days: 5))),
+        doneOn('f', today.subtract(const Duration(days: 6))),
+        doneOn('g', today.subtract(const Duration(days: 7))),
+      ]);
+      await store.load();
+      expect(store.currentStreak, 3);
+      expect(store.bestStreak, 4);
+
+      final week = store.recentCompletions(7);
+      expect(week.length, 7);
+      expect(week.last.day, today);
+      // Oldest first: days -6, -5, -4 done, -3 gap, -2, -1, today done.
+      expect(week.map((d) => d.count), [1, 1, 1, 0, 1, 1, 1]);
+    });
+
+    test('streak survives a day with nothing done yet', () async {
+      repo.tasks.add(doneOn('y', today.subtract(const Duration(days: 1))));
+      await store.load();
+      expect(store.currentStreak, 1);
+    });
+
+    test('no completions means no streak', () {
+      expect(store.currentStreak, 0);
+      expect(store.bestStreak, 0);
+    });
+  });
+
+  test('calendar finds tasks due on a day', () async {
+    final tomorrow = today.add(const Duration(days: 1));
+    await add('dentist', due: tomorrow, priority: Priority.low);
+    await add('taxes', due: tomorrow, priority: Priority.high);
+    await add('later', due: today.add(const Duration(days: 5)));
+
+    expect(store.tasksDueOn(tomorrow).map((t) => t.title), [
+      'taxes',
+      'dentist',
+    ]);
+    expect(store.openDueCounts()[tomorrow], 2);
+    expect(store.tasksDueOn(today), isEmpty);
+  });
+
+  test(
+    'attachments are added, removed with their task and restored on undo',
+    () async {
+      final t = await add('receipts');
+      final a = await store.addAttachment(
+        t.id,
+        Uint8List.fromList([1, 2, 3]),
+        'receipt.pdf',
+        'application/pdf',
+      );
+      expect(a, isNotNull);
+      expect(store.attachmentsOf(t.id).single.name, 'receipt.pdf');
+
+      final removed = await store.deleteTask(t);
+      expect(store.attachments, isEmpty);
+
+      // The database drops the attachment row with the task.
+      repo.attachments.clear();
+      await store.restore(removed!);
+      expect(store.attachmentsOf(t.id).single.name, 'receipt.pdf');
+      expect(repo.attachments.single.name, 'receipt.pdf');
+
+      await store.deleteAttachment(store.attachmentsOf(t.id).single);
+      expect(store.attachments, isEmpty);
+    },
+  );
 }

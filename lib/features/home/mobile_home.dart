@@ -7,7 +7,9 @@ import '../common/label_actions.dart';
 import '../common/user_avatar.dart';
 import '../tasks/quick_add_sheet.dart';
 import '../tasks/task_tile.dart';
+import 'calendar_tab.dart';
 import 'nav_panel.dart' show viewStyle;
+import 'stats_section.dart';
 
 /// Phone layout: bottom tab bar with Home, Search, New task and Profile.
 class MobileHome extends StatefulWidget {
@@ -25,7 +27,8 @@ class MobileHome extends StatefulWidget {
   });
 
   final TodoStore store;
-  final void Function(Task? task, String? initialTitle) onOpenEditor;
+  final void Function(Task? task, String? initialTitle, DateTime? initialDueAt)
+  onOpenEditor;
   final Future<void> Function(Task task) onDelete;
   final VoidCallback onSignOut;
   final String? userEmail;
@@ -39,8 +42,8 @@ class MobileHome extends StatefulWidget {
 }
 
 class _MobileHomeState extends State<MobileHome> {
-  // Bottom bar positions (Search is 1).
-  static const _home = 0, _new = 2, _profile = 3;
+  // Bottom bar positions: Home, Search, New task, Calendar, Profile.
+  static const _home = 0, _new = 2;
   int _tab = _home;
 
   void _select(int index) {
@@ -49,11 +52,20 @@ class _MobileHomeState extends State<MobileHome> {
       showQuickAddSheet(
         context,
         store: widget.store,
-        onMoreDetails: (title) => widget.onOpenEditor(null, title),
+        onMoreDetails: (title) => widget.onOpenEditor(null, title, null),
       );
       return;
     }
     setState(() => _tab = index);
+  }
+
+  void _addOn(DateTime day) {
+    showQuickAddSheet(
+      context,
+      store: widget.store,
+      dueAt: day,
+      onMoreDetails: (title) => widget.onOpenEditor(null, title, day),
+    );
   }
 
   void _goHome() => setState(() => _tab = _home);
@@ -65,16 +77,22 @@ class _MobileHomeState extends State<MobileHome> {
 
     return Scaffold(
       body: IndexedStack(
-        index: _tab == _profile ? 2 : _tab,
+        // The New task slot (2) opens a sheet, so pages after it shift down.
+        index: _tab > _new ? _tab - 1 : _tab,
         children: [
           _HomeTab(
             store: widget.store,
-            onOpen: (t) => widget.onOpenEditor(t, null),
+            onOpen: (t) => widget.onOpenEditor(t, null, null),
             onDelete: widget.onDelete,
           ),
           _SearchTab(
             store: widget.store,
-            onOpen: (t) => widget.onOpenEditor(t, null),
+            onOpen: (t) => widget.onOpenEditor(t, null, null),
+          ),
+          CalendarTab(
+            store: widget.store,
+            onOpen: (t) => widget.onOpenEditor(t, null, null),
+            onAdd: _addOn,
           ),
           _ProfileTab(
             store: widget.store,
@@ -119,6 +137,12 @@ class _MobileHomeState extends State<MobileHome> {
               icon: Icon(Icons.add_box_outlined),
               label: 'New task',
               tooltip: 'New task',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined),
+              selectedIcon: Icon(Icons.calendar_month_rounded),
+              label: 'Calendar',
+              tooltip: 'Calendar',
             ),
             NavigationDestination(
               icon: UserAvatar(name: name, url: widget.avatarUrl, radius: 14),
@@ -921,6 +945,7 @@ class _ProfileTab extends StatelessWidget {
                 child: const Text('Edit profile photo'),
               ),
             ),
+          StatsSection(store: store),
           sectionHeader('Projects', 'New project', () async {
             final p = await addProject(context, store);
             if (p != null) onShowView(TodoView(ViewKind.project, p.id));

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
@@ -134,6 +136,103 @@ class SupabaseTodoRepository implements TodoRepository {
         for (final tagId in t.tagIds) {'task_id': t.id, 'tag_id': tagId},
     ];
     if (links.isNotEmpty) await _db.from('task_tags').insert(links);
+  });
+
+  // Attachments --------------------------------------------------------------
+
+  static const _bucket = 'attachments';
+  static const maxAttachmentBytes = 10 * 1024 * 1024;
+
+  @override
+  Future<List<Attachment>> fetchAttachments() => _guard(() async {
+    final rows = await _db
+        .from('task_attachments')
+        .select()
+        .order('created_at');
+    return rows.map(Attachment.fromJson).toList();
+  });
+
+  @override
+  Future<Attachment> addAttachment(
+    String taskId,
+    Uint8List bytes,
+    String name,
+    String mimeType,
+  ) => _guard(() async {
+    if (bytes.length > maxAttachmentBytes) {
+      throw const TodoException('Files can be up to 10 MB.');
+    }
+    final uid = _db.auth.currentUser!.id;
+    final safeName = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final path =
+        '$uid/$taskId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+    try {
+      await _db.storage
+          .from(_bucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(contentType: mimeType),
+          );
+    } on StorageException catch (e) {
+      throw TodoException('Upload failed: ${e.message}');
+    }
+    try {
+      final row = await _db
+          .from('task_attachments')
+          .insert({
+            'task_id': taskId,
+            'name': name.length > 200 ? name.substring(0, 200) : name,
+            'path': path,
+            'mime_type': mimeType,
+            'size_bytes': bytes.length,
+          })
+          .select()
+          .single();
+      return Attachment.fromJson(row);
+    } catch (_) {
+      // Don't leave an orphaned file behind if the record can't be saved.
+      await _db.storage.from(_bucket).remove([path]);
+      rethrow;
+    }
+  });
+
+  @override
+  Future<void> deleteAttachment(Attachment attachment) => _guard(() async {
+    await _db.from('task_attachments').delete().eq('id', attachment.id);
+    try {
+      await _db.storage.from(_bucket).remove([attachment.path]);
+    } on StorageException {
+      // The record is gone; a leftover file is harmless and private.
+    }
+  });
+
+  @override
+  Future<void> restoreAttachments(List<Attachment> attachments) =>
+      _guard(() async {
+        if (attachments.isEmpty) return;
+        await _db.from('task_attachments').insert([
+          for (final a in attachments)
+            {
+              'id': a.id,
+              'task_id': a.taskId,
+              'name': a.name,
+              'path': a.path,
+              'mime_type': a.mimeType,
+              'size_bytes': a.sizeBytes,
+            },
+        ]);
+      });
+
+  @override
+  Future<String> attachmentUrl(Attachment attachment) => _guard(() async {
+    try {
+      return await _db.storage
+          .from(_bucket)
+          .createSignedUrl(attachment.path, 60 * 60);
+    } on StorageException catch (e) {
+      throw TodoException('Could not open the file: ${e.message}');
+    }
   });
 
   Future<void> _insertTagLinks(String taskId, List<String> tagIds) async {
