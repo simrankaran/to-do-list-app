@@ -25,10 +25,22 @@ class MobileHome extends StatefulWidget {
     this.onChangeAvatar,
     this.onRemoveAvatar,
     this.onOpenAssistant,
+    this.onOpenPeople,
+    this.onOpenSettings,
+    this.peopleBadge = 0,
   });
 
   /// Opens the AI assistant; null hides its button.
   final VoidCallback? onOpenAssistant;
+
+  /// Opens friends and chat; null hides its button.
+  final VoidCallback? onOpenPeople;
+
+  /// Opens settings; null hides its button.
+  final VoidCallback? onOpenSettings;
+
+  /// Unread messages plus pending requests, shown on the People button.
+  final int peopleBadge;
 
   final TodoStore store;
   final void Function(Task? task, String? initialTitle, DateTime? initialDueAt)
@@ -89,6 +101,8 @@ class _MobileHomeState extends State<MobileHome> {
             onOpen: (t) => widget.onOpenEditor(t, null, null),
             onDelete: widget.onDelete,
             onOpenAssistant: widget.onOpenAssistant,
+            onOpenPeople: widget.onOpenPeople,
+            peopleBadge: widget.peopleBadge,
           ),
           _SearchTab(
             store: widget.store,
@@ -107,6 +121,7 @@ class _MobileHomeState extends State<MobileHome> {
             onChangeAvatar: widget.onChangeAvatar,
             onRemoveAvatar: widget.onRemoveAvatar,
             onSignOut: widget.onSignOut,
+            onOpenSettings: widget.onOpenSettings,
             onShowView: (v) {
               widget.store.view = v;
               _goHome();
@@ -182,12 +197,16 @@ class _HomeTab extends StatelessWidget {
     required this.onOpen,
     required this.onDelete,
     this.onOpenAssistant,
+    this.onOpenPeople,
+    this.peopleBadge = 0,
   });
 
   final TodoStore store;
   final void Function(Task task) onOpen;
   final Future<void> Function(Task task) onDelete;
   final VoidCallback? onOpenAssistant;
+  final VoidCallback? onOpenPeople;
+  final int peopleBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +322,16 @@ class _HomeTab extends StatelessWidget {
           ),
         ),
         actions: [
+          if (onOpenPeople != null)
+            IconButton(
+              tooltip: 'People',
+              icon: Badge(
+                isLabelVisible: peopleBadge > 0,
+                label: Text('$peopleBadge'),
+                child: const Icon(Icons.people_alt_outlined),
+              ),
+              onPressed: onOpenPeople,
+            ),
           if (onOpenAssistant != null)
             IconButton(
               tooltip: 'Assistant',
@@ -786,6 +815,7 @@ class _ProfileTab extends StatelessWidget {
     required this.store,
     required this.onSignOut,
     required this.onShowView,
+    this.onOpenSettings,
     this.email,
     this.avatarUrl,
     this.avatarBusy = false,
@@ -800,6 +830,7 @@ class _ProfileTab extends StatelessWidget {
   final VoidCallback? onChangeAvatar;
   final VoidCallback? onRemoveAvatar;
   final VoidCallback onSignOut;
+  final VoidCallback? onOpenSettings;
   final void Function(TodoView view) onShowView;
 
   void _avatarMenu(BuildContext context) {
@@ -845,6 +876,12 @@ class _ProfileTab extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          if (onOpenSettings != null)
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: onOpenSettings,
+            ),
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout_rounded),

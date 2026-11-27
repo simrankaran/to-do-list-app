@@ -5,6 +5,7 @@ import 'core/theme.dart';
 import 'data/assistant_service.dart';
 import 'data/local_assistant.dart';
 import 'data/profile_repository.dart';
+import 'data/social_repository.dart';
 import 'data/supabase_todo_repository.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
@@ -60,6 +61,7 @@ class AuthGate extends StatelessWidget {
             SupabaseAssistantService(Supabase.instance.client),
           ),
           homeWidget: updateHomeWidget,
+          social: SupabaseSocialRepository(Supabase.instance.client),
           onSignOut: auth.signOut,
         );
       },

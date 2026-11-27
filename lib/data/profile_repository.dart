@@ -41,22 +41,34 @@ class SupabaseProfileRepository implements ProfileRepository {
         cacheNonce: DateTime.now().millisecondsSinceEpoch.toString(),
       );
       await _client.auth.updateUser(UserAttributes(data: {'avatar_url': url}));
+      await _saveToProfile(url);
       return url;
     } on StorageException catch (e) {
       throw TodoException('Upload failed: ${e.message}');
     } on AuthException catch (e) {
       throw TodoException(e.message);
+    } on PostgrestException catch (e) {
+      throw TodoException(e.message);
     }
   }
+
+  /// Copies the photo to the profile that connected people can see.
+  Future<void> _saveToProfile(String? url) => _client.from('profiles').upsert({
+    'id': _client.auth.currentUser!.id,
+    'avatar_url': url,
+  });
 
   @override
   Future<void> removeAvatar() async {
     try {
       await _client.storage.from('avatars').remove([_path]);
       await _client.auth.updateUser(UserAttributes(data: {'avatar_url': null}));
+      await _saveToProfile(null);
     } on StorageException catch (e) {
       throw TodoException('Could not remove the photo: ${e.message}');
     } on AuthException catch (e) {
+      throw TodoException(e.message);
+    } on PostgrestException catch (e) {
       throw TodoException(e.message);
     }
   }

@@ -7,11 +7,15 @@ import '../../data/assistant_service.dart';
 import '../../data/models.dart';
 import '../../data/profile_repository.dart';
 import '../../data/todo_repository.dart';
+import '../../data/social_models.dart';
+import '../../data/social_repository.dart';
 import '../../services/reminders.dart';
 import '../../state/todo_store.dart';
 import '../assistant/assistant_page.dart';
 import '../common/image_source.dart';
 import '../common/user_avatar.dart';
+import '../social/people_page.dart';
+import '../social/settings_page.dart';
 import '../tasks/task_editor_page.dart';
 import '../tasks/task_tile.dart';
 import 'mobile_home.dart';
@@ -29,6 +33,7 @@ class HomePage extends StatefulWidget {
     this.reminders = const NoReminders(),
     this.assistant,
     this.homeWidget,
+    this.social,
   });
 
   /// The AI assistant; without it the assistant button is hidden.
@@ -36,6 +41,9 @@ class HomePage extends StatefulWidget {
 
   /// Refreshes the home screen widget; called with null tasks on sign-out.
   final Future<void> Function(List<Task>? tasks, DateTime now)? homeWidget;
+
+  /// People, chat and the shared profile; without it those screens are hidden.
+  final SocialRepository? social;
 
   final TodoRepository repository;
   final Future<void> Function() onSignOut;
@@ -63,6 +71,13 @@ class _HomePageState extends State<HomePage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _search = TextEditingController();
   late String? _avatarUrl = widget.avatarUrl;
+
+  // Kept from the first build so its live connection isn't recreated.
+  late final SocialRepository? _social = widget.social;
+  StreamSubscription<void>? _socialSub;
+
+  /// Unread chat messages plus requests waiting for an answer.
+  int _peopleBadge = 0;
   bool _avatarBusy = false;
 
   @override
@@ -72,6 +87,11 @@ class _HomePageState extends State<HomePage> {
     _errorSub = _store.errors.listen(_showMessage);
     _store.reminders = widget.reminders;
     _store.addListener(_queueReminderSync);
+    final social = _social;
+    if (social != null) {
+      _refreshPeopleBadge();
+      _socialSub = social.changes.listen((_) => _refreshPeopleBadge());
+    }
   }
 
   @override
@@ -120,6 +140,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _errorSub.cancel();
     _reminderTimer?.cancel();
+    _socialSub?.cancel();
     _store.removeListener(_queueReminderSync);
     _store.dispose();
     _search.dispose();
@@ -176,6 +197,56 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _refreshPeopleBadge() async {
+    final social = _social;
+    if (social == null) return;
+    try {
+      final unread = await social.unreadCounts();
+      final connections = await social.fetchConnections();
+      final count =
+          unread.values.fold<int>(0, (sum, n) => sum + n) +
+          connections.where((c) => c.status == LinkStatus.incoming).length;
+      if (mounted && count != _peopleBadge) {
+        setState(() => _peopleBadge = count);
+      }
+    } on TodoException {
+      // The badge is a nicety; the People screen shows real errors.
+    }
+  }
+
+  void _openPeople() {
+    final social = _social;
+    if (social == null) return;
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                PeoplePage(social: social, myEmail: widget.userEmail),
+          ),
+        )
+        .then((_) => _refreshPeopleBadge());
+  }
+
+  void _openSettings() {
+    final social = _social;
+    if (social == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsPage(
+          social: social,
+          profile: widget.profile,
+          pickImage: widget.pickImage,
+          email: widget.userEmail,
+          avatarUrl: _avatarUrl,
+          onAvatarChanged: (url) {
+            if (mounted) setState(() => _avatarUrl = url);
+          },
+          onSignOut: _signOut,
+        ),
+      ),
+    );
+  }
+
   void _openAssistant() {
     final service = widget.assistant;
     if (service == null) return;
@@ -223,6 +294,9 @@ class _HomePageState extends State<HomePage> {
             onOpenEditor: _openEditor,
             onDelete: _delete,
             onOpenAssistant: widget.assistant == null ? null : _openAssistant,
+            onOpenPeople: _social == null ? null : _openPeople,
+            onOpenSettings: _social == null ? null : _openSettings,
+            peopleBadge: _peopleBadge,
           );
         }
         final nav = NavPanel(
@@ -269,6 +343,22 @@ class _HomePageState extends State<HomePage> {
                 selectedIcon: const Icon(Icons.visibility_rounded),
                 onPressed: () => _store.showCompleted = !_store.showCompleted,
               ),
+              if (_social != null) ...[
+                IconButton(
+                  tooltip: 'People',
+                  icon: Badge(
+                    isLabelVisible: _peopleBadge > 0,
+                    label: Text('$_peopleBadge'),
+                    child: const Icon(Icons.people_alt_outlined),
+                  ),
+                  onPressed: _openPeople,
+                ),
+                IconButton(
+                  tooltip: 'Settings',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _openSettings,
+                ),
+              ],
               if (widget.assistant != null)
                 IconButton(
                   tooltip: 'Assistant',
