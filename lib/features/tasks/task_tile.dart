@@ -70,6 +70,12 @@ class TaskTile extends StatelessWidget {
           icon: Icons.notifications_active_outlined,
           color: scheme.onSurfaceVariant,
         ),
+      if (task.repeat != RepeatRule.none)
+        _Badge(
+          icon: Icons.repeat_rounded,
+          text: task.repeat.shortLabel,
+          color: scheme.onSurfaceVariant,
+        ),
       if (task.dueAt != null)
         _Badge(
           icon: Icons.calendar_today_rounded,

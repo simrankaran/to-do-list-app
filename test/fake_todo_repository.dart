@@ -90,6 +90,8 @@ class FakeTodoRepository implements TodoRepository {
       earlyMinutes: draft.earlyMinutes,
       alertStyle: draft.alertStyle,
       alertSound: draft.alertSound,
+      repeat: draft.repeat,
+      repeatDays: draft.repeatDays,
     );
     tasks.add(t);
     return t;

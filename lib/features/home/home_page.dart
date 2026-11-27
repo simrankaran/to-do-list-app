@@ -1,13 +1,15 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../data/assistant_service.dart';
 import '../../data/models.dart';
 import '../../data/profile_repository.dart';
 import '../../data/todo_repository.dart';
 import '../../services/reminders.dart';
 import '../../state/todo_store.dart';
+import '../assistant/assistant_page.dart';
 import '../common/image_source.dart';
 import '../common/user_avatar.dart';
 import '../tasks/task_editor_page.dart';
@@ -25,7 +27,15 @@ class HomePage extends StatefulWidget {
     this.profile,
     this.pickImage = pickProfileImage,
     this.reminders = const NoReminders(),
+    this.assistant,
+    this.homeWidget,
   });
+
+  /// The AI assistant; without it the assistant button is hidden.
+  final AssistantService? assistant;
+
+  /// Refreshes the home screen widget; called with null tasks on sign-out.
+  final Future<void> Function(List<Task>? tasks, DateTime now)? homeWidget;
 
   final TodoRepository repository;
   final Future<void> Function() onSignOut;
@@ -160,9 +170,19 @@ class _HomePageState extends State<HomePage> {
   void _queueReminderSync() {
     if (_store.loading) return;
     _reminderTimer?.cancel();
-    _reminderTimer = Timer(
-      const Duration(milliseconds: 500),
-      () => widget.reminders.sync(_store.tasks),
+    _reminderTimer = Timer(const Duration(milliseconds: 500), () {
+      widget.reminders.sync(_store.tasks);
+      widget.homeWidget?.call(_store.tasks, DateTime.now());
+    });
+  }
+
+  void _openAssistant() {
+    final service = widget.assistant;
+    if (service == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AssistantPage(store: _store, service: service),
+      ),
     );
   }
 
@@ -171,6 +191,7 @@ class _HomePageState extends State<HomePage> {
       // Don't leave this account's reminders on the device.
       _reminderTimer?.cancel();
       await widget.reminders.sync(const []);
+      await widget.homeWidget?.call(null, DateTime.now());
       await widget.onSignOut();
     } catch (e) {
       _showMessage('Could not sign out: $e');
@@ -201,6 +222,7 @@ class _HomePageState extends State<HomePage> {
             onSignOut: _signOut,
             onOpenEditor: _openEditor,
             onDelete: _delete,
+            onOpenAssistant: widget.assistant == null ? null : _openAssistant,
           );
         }
         final nav = NavPanel(
@@ -247,6 +269,12 @@ class _HomePageState extends State<HomePage> {
                 selectedIcon: const Icon(Icons.visibility_rounded),
                 onPressed: () => _store.showCompleted = !_store.showCompleted,
               ),
+              if (widget.assistant != null)
+                IconButton(
+                  tooltip: 'Assistant',
+                  icon: const Icon(Icons.auto_awesome_rounded),
+                  onPressed: _openAssistant,
+                ),
               IconButton(
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh_rounded),

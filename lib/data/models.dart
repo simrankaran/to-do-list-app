@@ -69,6 +69,23 @@ enum AlertSound {
       values.firstWhere((s) => s.key == value, orElse: () => standard);
 }
 
+/// How a task repeats. Finishing a repeating task creates the next one.
+enum RepeatRule {
+  none('none', 'Does not repeat', ''),
+  daily('daily', 'Every day', 'Daily'),
+  weekly('weekly', 'Every week', 'Weekly'),
+  monthly('monthly', 'Every month', 'Monthly'),
+  days('days', 'On chosen days', 'Custom days');
+
+  const RepeatRule(this.key, this.label, this.shortLabel);
+  final String key;
+  final String label;
+  final String shortLabel;
+
+  static RepeatRule parse(String? value) =>
+      values.firstWhere((r) => r.key == value, orElse: () => none);
+}
+
 /// Minutes-before-start options for the early heads-up (0 = off).
 const earlyReminderOptions = [0, 5, 10, 15, 30, 60];
 
@@ -103,6 +120,8 @@ class Task {
     this.earlyMinutes = 0,
     this.alertStyle = AlertStyle.sound,
     this.alertSound = AlertSound.standard,
+    this.repeat = RepeatRule.none,
+    this.repeatDays = 0,
   });
 
   /// A task that has not been saved yet. The database assigns the real id.
@@ -122,6 +141,8 @@ class Task {
     int earlyMinutes = 0,
     AlertStyle alertStyle = AlertStyle.sound,
     AlertSound alertSound = AlertSound.standard,
+    RepeatRule repeat = RepeatRule.none,
+    int repeatDays = 0,
   }) => Task(
     id: '',
     title: title,
@@ -140,6 +161,8 @@ class Task {
     earlyMinutes: earlyMinutes,
     alertStyle: alertStyle,
     alertSound: alertSound,
+    repeat: repeat,
+    repeatDays: repeatDays,
   );
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -166,6 +189,8 @@ class Task {
       earlyMinutes: (json['early_minutes'] as num?)?.toInt() ?? 0,
       alertStyle: AlertStyle.parse(json['alert_style'] as String?),
       alertSound: AlertSound.parse(json['alert_sound'] as String?),
+      repeat: RepeatRule.parse(json['repeat_rule'] as String?),
+      repeatDays: (json['repeat_days'] as num?)?.toInt() ?? 0,
       tagIds: [
         for (final link in links)
           (link as Map<String, dynamic>)['tag_id'] as String,
@@ -203,6 +228,15 @@ class Task {
   final AlertStyle alertStyle;
   final AlertSound alertSound;
 
+  final RepeatRule repeat;
+
+  /// Weekdays for [RepeatRule.days] as a bit mask: bit 0 = Monday ... bit 6 =
+  /// Sunday.
+  final int repeatDays;
+
+  /// Whether [RepeatRule.days] includes [weekday] (1 = Monday ... 7 = Sunday).
+  bool repeatsOn(int weekday) => repeatDays & (1 << (weekday - 1)) != 0;
+
   bool get isSubtask => parentId != null;
 
   bool get hasTimeSlot => startsAt != null && endsAt != null;
@@ -231,6 +265,8 @@ class Task {
     'early_minutes': earlyMinutes,
     'alert_style': alertStyle.name,
     'alert_sound': alertSound.key,
+    'repeat_rule': repeat.key,
+    'repeat_days': repeatDays,
   };
 
   /// Pass `null` for [projectId], [dueAt], [startsAt] or [endsAt] to clear them.
@@ -245,6 +281,8 @@ class Task {
     int? earlyMinutes,
     AlertStyle? alertStyle,
     AlertSound? alertSound,
+    RepeatRule? repeat,
+    int? repeatDays,
     List<String>? tagIds,
     Object? projectId = _keep,
     Object? dueAt = _keep,
@@ -265,6 +303,8 @@ class Task {
     earlyMinutes: earlyMinutes ?? this.earlyMinutes,
     alertStyle: alertStyle ?? this.alertStyle,
     alertSound: alertSound ?? this.alertSound,
+    repeat: repeat ?? this.repeat,
+    repeatDays: repeatDays ?? this.repeatDays,
     tagIds: tagIds ?? this.tagIds,
     startsAt: identical(startsAt, _keep)
         ? this.startsAt

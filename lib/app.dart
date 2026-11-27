@@ -2,10 +2,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/theme.dart';
+import 'data/assistant_service.dart';
 import 'data/profile_repository.dart';
 import 'data/supabase_todo_repository.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
+import 'services/home_widget_sync.dart';
 import 'services/reminders.dart';
 
 class TodoApp extends StatelessWidget {
@@ -52,6 +54,8 @@ class AuthGate extends StatelessWidget {
           userEmail: user.email,
           avatarUrl: user.userMetadata?['avatar_url'] as String?,
           reminders: reminders,
+          assistant: SupabaseAssistantService(Supabase.instance.client),
+          homeWidget: updateHomeWidget,
           onSignOut: auth.signOut,
         );
       },

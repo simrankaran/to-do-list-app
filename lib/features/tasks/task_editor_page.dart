@@ -43,6 +43,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   late int _earlyMinutes;
   late AlertStyle _alertStyle;
   late AlertSound _alertSound;
+  late RepeatRule _repeat;
+  late int _repeatDays;
   DateTime? _dueAt;
   String? _projectId;
   late Set<String> _tagIds;
@@ -67,6 +69,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _earlyMinutes = t?.earlyMinutes ?? 0;
     _alertStyle = t?.alertStyle ?? AlertStyle.sound;
     _alertSound = t?.alertSound ?? AlertSound.standard;
+    _repeat = t?.repeat ?? RepeatRule.none;
+    _repeatDays = t?.repeatDays ?? 0;
     if (t != null) {
       _dueAt = t.dueAt;
       _projectId = t.projectId;
@@ -123,6 +127,12 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       await store.reminders.requestPermission();
     }
     final tagIds = _tagIds.toList();
+    // "Chosen days" with no day ticked means it doesn't repeat.
+    if (_repeat == RepeatRule.days && _repeatDays == 0) {
+      _repeat = RepeatRule.none;
+    }
+    // A repeating task needs a date to repeat from.
+    if (_repeat != RepeatRule.none && _dueAt == null) _dueAt = store.today;
     if (_isNew) {
       final saved = await store.addTask(
         Task.draft(
@@ -140,6 +150,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           earlyMinutes: _earlyMinutes,
           alertStyle: _alertStyle,
           alertSound: _alertSound,
+          repeat: _repeat,
+          repeatDays: _repeatDays,
         ),
       );
       if (saved == null) {
@@ -163,6 +175,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           earlyMinutes: _earlyMinutes,
           alertStyle: _alertStyle,
           alertSound: _alertSound,
+          repeat: _repeat,
+          repeatDays: _repeatDays,
         ),
       );
     }
@@ -313,6 +327,23 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                     ),
                 ],
               ),
+              if (widget.task?.isSubtask != true) ...[
+                const SizedBox(height: 20),
+                _Section('Repeat'),
+                _RepeatEditor(
+                  rule: _repeat,
+                  days: _repeatDays,
+                  onRuleChanged: (r) => setState(() {
+                    _repeat = r;
+                    // Start "chosen days" from the task's own weekday.
+                    if (r == RepeatRule.days && _repeatDays == 0) {
+                      final day = _startsAt ?? _dueAt ?? today;
+                      _repeatDays = 1 << (day.weekday - 1);
+                    }
+                  }),
+                  onDaysChanged: (d) => setState(() => _repeatDays = d),
+                ),
+              ],
               const SizedBox(height: 20),
               _Section('Time'),
               _TimeSlotEditor(
@@ -810,6 +841,71 @@ class _AlertOptions extends StatelessWidget {
             hintText: 'e.g. Stop and stretch',
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// How a task repeats, with weekday chips for "On chosen days".
+class _RepeatEditor extends StatelessWidget {
+  const _RepeatEditor({
+    required this.rule,
+    required this.days,
+    required this.onRuleChanged,
+    required this.onDaysChanged,
+  });
+
+  final RepeatRule rule;
+  final int days;
+  final ValueChanged<RepeatRule> onRuleChanged;
+  final ValueChanged<int> onDaysChanged;
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<RepeatRule>(
+          initialValue: rule,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.repeat_rounded),
+          ),
+          items: [
+            for (final r in RepeatRule.values)
+              DropdownMenuItem(
+                value: r,
+                child: Text(r.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (r) => onRuleChanged(r ?? RepeatRule.none),
+        ),
+        if (rule == RepeatRule.days) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < 7; i++)
+                FilterChip(
+                  label: Text(_dayNames[i]),
+                  selected: days & (1 << i) != 0,
+                  onSelected: (on) =>
+                      onDaysChanged(on ? days | (1 << i) : days & ~(1 << i)),
+                ),
+            ],
+          ),
+        ],
+        if (rule != RepeatRule.none) ...[
+          const SizedBox(height: 6),
+          Text(
+            'When you finish it, the next one is added automatically.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ],
     );
   }

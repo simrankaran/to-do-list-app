@@ -24,7 +24,11 @@ class MobileHome extends StatefulWidget {
     this.avatarBusy = false,
     this.onChangeAvatar,
     this.onRemoveAvatar,
+    this.onOpenAssistant,
   });
+
+  /// Opens the AI assistant; null hides its button.
+  final VoidCallback? onOpenAssistant;
 
   final TodoStore store;
   final void Function(Task? task, String? initialTitle, DateTime? initialDueAt)
@@ -84,6 +88,7 @@ class _MobileHomeState extends State<MobileHome> {
             store: widget.store,
             onOpen: (t) => widget.onOpenEditor(t, null, null),
             onDelete: widget.onDelete,
+            onOpenAssistant: widget.onOpenAssistant,
           ),
           _SearchTab(
             store: widget.store,
@@ -176,11 +181,13 @@ class _HomeTab extends StatelessWidget {
     required this.store,
     required this.onOpen,
     required this.onDelete,
+    this.onOpenAssistant,
   });
 
   final TodoStore store;
   final void Function(Task task) onOpen;
   final Future<void> Function(Task task) onDelete;
+  final VoidCallback? onOpenAssistant;
 
   @override
   Widget build(BuildContext context) {
@@ -296,6 +303,12 @@ class _HomeTab extends StatelessWidget {
           ),
         ),
         actions: [
+          if (onOpenAssistant != null)
+            IconButton(
+              tooltip: 'Assistant',
+              icon: const Icon(Icons.auto_awesome_rounded),
+              onPressed: onOpenAssistant,
+            ),
           PopupMenuButton<SortBy>(
             tooltip: 'Sort',
             icon: const Icon(Icons.swap_vert_rounded),

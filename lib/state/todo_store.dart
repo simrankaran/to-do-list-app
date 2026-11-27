@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/models.dart';
+import '../data/recurrence.dart';
 import '../data/todo_repository.dart';
 import '../services/reminders.dart';
 
@@ -258,9 +259,44 @@ class TodoStore extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleDone(Task task) => updateTask(
-    task.copyWith(done: !task.done, completedAt: task.done ? null : _clock()),
-  );
+  /// Ticks or unticks [task]. Completing a repeating task also creates its
+  /// next occurrence (with fresh copies of its subtasks).
+  Future<void> toggleDone(Task task) async {
+    final completing = !task.done;
+    await updateTask(
+      task.copyWith(
+        done: completing,
+        completedAt: completing ? _clock() : null,
+      ),
+    );
+    if (!completing) return;
+    final saved = tasks.where((t) => t.id == task.id).firstOrNull;
+    if (saved == null || !saved.done) return; // the change was rolled back
+
+    final draft = nextOccurrence(task, today);
+    if (draft == null) return;
+    // Ticking, unticking and ticking again must not create a duplicate.
+    final exists = tasks.any(
+      (t) =>
+          !t.done &&
+          !t.isSubtask &&
+          t.title == draft.title &&
+          t.repeat == draft.repeat &&
+          t.dueAt == draft.dueAt,
+    );
+    if (exists) return;
+    final next = await addTask(draft);
+    if (next == null) return;
+    for (final sub in subtasksOf(task.id)) {
+      await addTask(
+        Task.draft(
+          title: sub.title,
+          parentId: next.id,
+          projectId: next.projectId,
+        ),
+      );
+    }
+  }
 
   /// Removes [task] and its subtasks. Returns what was removed so it can be
   /// passed to [restore], or null if the delete failed.
