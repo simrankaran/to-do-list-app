@@ -51,7 +51,10 @@ void main() {
 
     // Open the task, make it 2 hours long and save.
     // The task has no project, so it shows in the default Inbox view.
+    // Rows also accept a double-tap, so a single tap only registers once
+    // the double-tap window (300 ms) has passed.
     await tester.tap(find.text('Gym'));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('2 h'), 200);
     await tester.tap(find.text('2 h'));
