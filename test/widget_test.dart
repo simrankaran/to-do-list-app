@@ -96,6 +96,14 @@ void main() {
 
     await tester.tap(find.text('Ship release'));
     await tester.pumpAndSettle();
+    // The subtask box sits below the Time and Photos sections; scroll the
+    // page itself (the first scrollable; text fields have their own) to it.
+    await tester.scrollUntilVisible(
+      find.widgetWithText(TextField, 'Add a subtask'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Add a subtask'),
       'Write notes',

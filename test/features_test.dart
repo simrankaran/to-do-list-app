@@ -56,7 +56,10 @@ void main() {
     await tester.tap(find.text('Gym'));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('2 h'), 200);
+    // The editor has several scrollables (the page and its text fields), so
+    // just bring the chip into view rather than scrolling a guessed one.
+    await tester.ensureVisible(find.text('2 h'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('2 h'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
