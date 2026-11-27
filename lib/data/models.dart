@@ -60,6 +60,9 @@ class Task {
     this.done = false,
     this.completedAt,
     this.tagIds = const [],
+    this.startsAt,
+    this.endsAt,
+    this.remind = true,
   });
 
   /// A task that has not been saved yet. The database assigns the real id.
@@ -71,6 +74,9 @@ class Task {
     Priority priority = Priority.none,
     DateTime? dueAt,
     List<String> tagIds = const [],
+    DateTime? startsAt,
+    DateTime? endsAt,
+    bool remind = true,
   }) => Task(
     id: '',
     title: title,
@@ -81,6 +87,9 @@ class Task {
     priority: priority,
     dueAt: dueAt,
     tagIds: tagIds,
+    startsAt: startsAt,
+    endsAt: endsAt,
+    remind: remind,
   );
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -99,6 +108,9 @@ class Task {
       dueAt: date('due_at'),
       done: json['done'] as bool,
       completedAt: date('completed_at'),
+      startsAt: date('starts_at'),
+      endsAt: date('ends_at'),
+      remind: json['remind'] as bool? ?? true,
       tagIds: [
         for (final link in links)
           (link as Map<String, dynamic>)['tag_id'] as String,
@@ -120,7 +132,20 @@ class Task {
   final DateTime? completedAt;
   final List<String> tagIds;
 
+  /// Fixed time slot: when the work starts and when it must stop.
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+
+  /// Whether to notify when the time slot starts and ends.
+  final bool remind;
+
   bool get isSubtask => parentId != null;
+
+  bool get hasTimeSlot => startsAt != null && endsAt != null;
+
+  /// True while the current time is inside the task's time slot.
+  bool isInProgress(DateTime now) =>
+      !done && hasTimeSlot && !now.isBefore(startsAt!) && now.isBefore(endsAt!);
 
   bool isOverdue(DateTime today) =>
       !done && dueAt != null && dueAt!.isBefore(today);
@@ -134,18 +159,24 @@ class Task {
     'priority': priority.index,
     'due_at': dueAt?.toUtc().toIso8601String(),
     'done': done,
+    'starts_at': startsAt?.toUtc().toIso8601String(),
+    'ends_at': endsAt?.toUtc().toIso8601String(),
+    'remind': remind,
   };
 
-  /// Pass `null` for [projectId] or [dueAt] to clear them.
+  /// Pass `null` for [projectId], [dueAt], [startsAt] or [endsAt] to clear them.
   Task copyWith({
     String? title,
     String? notes,
     Priority? priority,
     bool? done,
+    bool? remind,
     List<String>? tagIds,
     Object? projectId = _keep,
     Object? dueAt = _keep,
     Object? completedAt = _keep,
+    Object? startsAt = _keep,
+    Object? endsAt = _keep,
   }) => Task(
     id: id,
     createdAt: createdAt,
@@ -154,7 +185,12 @@ class Task {
     notes: notes ?? this.notes,
     priority: priority ?? this.priority,
     done: done ?? this.done,
+    remind: remind ?? this.remind,
     tagIds: tagIds ?? this.tagIds,
+    startsAt: identical(startsAt, _keep)
+        ? this.startsAt
+        : startsAt as DateTime?,
+    endsAt: identical(endsAt, _keep) ? this.endsAt : endsAt as DateTime?,
     projectId: identical(projectId, _keep)
         ? this.projectId
         : projectId as String?,

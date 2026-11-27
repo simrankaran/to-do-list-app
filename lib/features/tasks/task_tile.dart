@@ -49,7 +49,27 @@ class TaskTile extends StatelessWidget {
     final project = store.projectById(task.projectId);
     final accent = priorityColor(task.priority, scheme);
 
+    const live = Color(0xFF16A34A);
+    final inProgress = task.isInProgress(store.now);
     final badges = <Widget>[
+      if (inProgress)
+        const _Badge(
+          icon: Icons.play_circle_fill_rounded,
+          text: 'Now',
+          color: live,
+        ),
+      if (task.hasTimeSlot)
+        _Badge(
+          icon: Icons.schedule_rounded,
+          text:
+              '${DateFormat.jm().format(task.startsAt!)} – ${DateFormat.jm().format(task.endsAt!)}',
+          color: inProgress ? live : scheme.onSurfaceVariant,
+        ),
+      if (task.hasTimeSlot && task.remind && !task.done)
+        _Badge(
+          icon: Icons.notifications_active_outlined,
+          color: scheme.onSurfaceVariant,
+        ),
       if (task.dueAt != null)
         _Badge(
           icon: Icons.calendar_today_rounded,

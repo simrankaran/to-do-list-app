@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
@@ -34,6 +35,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   late final TextEditingController _notes;
   final _newSubtask = TextEditingController();
   late Priority _priority;
+  DateTime? _startsAt;
+  DateTime? _endsAt;
+  late bool _remind;
   DateTime? _dueAt;
   String? _projectId;
   late Set<String> _tagIds;
@@ -50,6 +54,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _title = TextEditingController(text: t?.title ?? widget.initialTitle ?? '');
     _notes = TextEditingController(text: t?.notes ?? '');
     _priority = t?.priority ?? Priority.none;
+    _startsAt = t?.startsAt;
+    _endsAt = t?.endsAt;
+    _remind = t?.remind ?? true;
     if (t != null) {
       _dueAt = t.dueAt;
       _projectId = t.projectId;
@@ -84,6 +91,10 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       return;
     }
     setState(() => _saving = true);
+    if (_startsAt != null && _endsAt != null && _remind) {
+      // Ask for notification permission the first time a slot is used.
+      await store.reminders.requestPermission();
+    }
     final tagIds = _tagIds.toList();
     if (_isNew) {
       final saved = await store.addTask(
@@ -94,6 +105,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           dueAt: _dueAt,
           projectId: _projectId,
           tagIds: tagIds,
+          startsAt: _startsAt,
+          endsAt: _endsAt,
+          remind: _remind,
         ),
       );
       if (saved == null) {
@@ -109,6 +123,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           dueAt: _dueAt,
           projectId: _projectId,
           tagIds: tagIds,
+          startsAt: _startsAt,
+          endsAt: _endsAt,
+          remind: _remind,
         ),
       );
     }
@@ -260,6 +277,21 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                 ],
               ),
               const SizedBox(height: 20),
+              _Section('Time'),
+              _TimeSlotEditor(
+                startsAt: _startsAt,
+                endsAt: _endsAt,
+                remind: _remind,
+                today: today,
+                onChanged: (start, end) => setState(() {
+                  _startsAt = start;
+                  _endsAt = end;
+                  // The task is due on the day its time slot starts.
+                  if (start != null) _dueAt = dateOnly(start);
+                }),
+                onRemindChanged: (v) => setState(() => _remind = v),
+              ),
+              const SizedBox(height: 20),
               _Section('Project'),
               DropdownButtonFormField<String?>(
                 initialValue: _projectId,
@@ -390,4 +422,206 @@ class _Section extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(label, style: Theme.of(context).textTheme.titleSmall),
   );
+}
+
+/// Start and end time for a task, with quick durations and a notify switch.
+class _TimeSlotEditor extends StatelessWidget {
+  const _TimeSlotEditor({
+    required this.startsAt,
+    required this.endsAt,
+    required this.remind,
+    required this.today,
+    required this.onChanged,
+    required this.onRemindChanged,
+  });
+
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool remind;
+  final DateTime today;
+  final void Function(DateTime? start, DateTime? end) onChanged;
+  final ValueChanged<bool> onRemindChanged;
+
+  static const _durations = [
+    Duration(minutes: 30),
+    Duration(hours: 1),
+    Duration(minutes: 90),
+    Duration(hours: 2),
+    Duration(hours: 3),
+  ];
+
+  static String _label(Duration d) {
+    final h = d.inHours, m = d.inMinutes % 60;
+    if (h == 0) return '$m min';
+    return m == 0 ? '$h h' : '$h h $m';
+  }
+
+  Future<void> _pickStart(BuildContext context) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: startsAt ?? today,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null || !context.mounted) return;
+    final nextHour = DateTime.now().add(const Duration(hours: 1));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: startsAt != null
+          ? TimeOfDay.fromDateTime(startsAt!)
+          : TimeOfDay(hour: nextHour.hour, minute: 0),
+      helpText: 'Start time',
+    );
+    if (time == null) return;
+    final start = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    // Keep the current length when moving the start; default to one hour.
+    final length = startsAt != null && endsAt != null
+        ? endsAt!.difference(startsAt!)
+        : const Duration(hours: 1);
+    onChanged(start, start.add(length));
+  }
+
+  Future<void> _pickEnd(BuildContext context) async {
+    final start = startsAt!;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        endsAt ?? start.add(const Duration(hours: 1)),
+      ),
+      helpText: 'End time',
+    );
+    if (time == null) return;
+    var end = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      time.hour,
+      time.minute,
+    );
+    // An end time at or before the start means it runs past midnight.
+    if (!end.isAfter(start)) end = end.add(const Duration(days: 1));
+    onChanged(start, end);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    if (startsAt == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: () => _pickStart(context),
+          icon: const Icon(Icons.schedule_rounded),
+          label: const Text('Set start and end time'),
+        ),
+      );
+    }
+
+    final start = startsAt!;
+    final end = endsAt ?? start.add(const Duration(hours: 1));
+    final length = end.difference(start);
+    final time = DateFormat.jm();
+
+    Widget box(String label, String main, String sub, VoidCallback onTap) =>
+        Expanded(
+          child: Material(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(main, style: theme.textTheme.titleLarge),
+                    Text(sub, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            box(
+              'Starts',
+              time.format(start),
+              formatDue(start, today),
+              () => _pickStart(context),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(
+                Icons.arrow_forward_rounded,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            box(
+              'Ends',
+              time.format(end),
+              dateOnly(end) == dateOnly(start)
+                  ? _label(length)
+                  : 'next day Â· ${_label(length)}',
+              () => _pickEnd(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final d in _durations)
+              ChoiceChip(
+                label: Text(_label(d)),
+                selected: length == d,
+                onSelected: (_) => onChanged(start, start.add(d)),
+              ),
+          ],
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(
+            remind
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_off_outlined,
+          ),
+          title: const Text('Notify me when it starts and ends'),
+          subtitle: Text(
+            remind
+                ? 'Alerts at ${time.format(start)} and ${time.format(end)}'
+                : 'No alerts for this task',
+          ),
+          value: remind,
+          onChanged: onRemindChanged,
+        ),
+        TextButton.icon(
+          onPressed: () => onChanged(null, null),
+          icon: const Icon(Icons.close_rounded, size: 18),
+          label: const Text('Remove time'),
+        ),
+      ],
+    );
+  }
 }

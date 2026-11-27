@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/models.dart';
 import '../data/todo_repository.dart';
+import '../services/reminders.dart';
 
 enum ViewKind { inbox, today, upcoming, all, completed, project, tag }
 
@@ -93,6 +94,11 @@ class TodoStore extends ChangeNotifier {
   }
 
   DateTime get today => dateOnly(_clock());
+
+  DateTime get now => _clock();
+
+  /// Phone notifications; the editor asks for permission through this.
+  ReminderScheduler reminders = const NoReminders();
 
   Project? projectById(String? id) =>
       id == null ? null : projects.where((p) => p.id == id).firstOrNull;
@@ -451,6 +457,13 @@ class TodoStore extends ChangeNotifier {
         .toList()
       ..sort((a, b) {
         if (a.done != b.done) return a.done ? 1 : -1;
+        // Timed tasks first, in start-time order.
+        if (a.startsAt != null || b.startsAt != null) {
+          if (a.startsAt == null) return 1;
+          if (b.startsAt == null) return -1;
+          final byTime = a.startsAt!.compareTo(b.startsAt!);
+          if (byTime != 0) return byTime;
+        }
         return b.priority.index.compareTo(a.priority.index);
       });
   }

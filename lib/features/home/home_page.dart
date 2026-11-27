@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/models.dart';
 import '../../data/profile_repository.dart';
 import '../../data/todo_repository.dart';
+import '../../services/reminders.dart';
 import '../../state/todo_store.dart';
 import '../common/image_source.dart';
 import '../common/user_avatar.dart';
@@ -23,6 +24,7 @@ class HomePage extends StatefulWidget {
     this.avatarUrl,
     this.profile,
     this.pickImage = pickProfileImage,
+    this.reminders = const NoReminders(),
   });
 
   final TodoRepository repository;
@@ -35,6 +37,9 @@ class HomePage extends StatefulWidget {
 
   /// Lets the user choose a photo (replaced in tests).
   final Future<PickedImage?> Function() pickImage;
+
+  /// Phone notifications for task start and end times.
+  final ReminderScheduler reminders;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -55,6 +60,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _store = TodoStore(widget.repository)..load();
     _errorSub = _store.errors.listen(_showMessage);
+    _store.reminders = widget.reminders;
+    _store.addListener(_queueReminderSync);
   }
 
   @override
@@ -102,6 +109,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _errorSub.cancel();
+    _reminderTimer?.cancel();
+    _store.removeListener(_queueReminderSync);
     _store.dispose();
     _search.dispose();
     super.dispose();
@@ -145,8 +154,23 @@ class _HomePageState extends State<HomePage> {
       );
   }
 
+  Timer? _reminderTimer;
+
+  /// Reschedules notifications shortly after tasks change, once per burst.
+  void _queueReminderSync() {
+    if (_store.loading) return;
+    _reminderTimer?.cancel();
+    _reminderTimer = Timer(
+      const Duration(milliseconds: 500),
+      () => widget.reminders.sync(_store.tasks),
+    );
+  }
+
   Future<void> _signOut() async {
     try {
+      // Don't leave this account's reminders on the device.
+      _reminderTimer?.cancel();
+      await widget.reminders.sync(const []);
       await widget.onSignOut();
     } catch (e) {
       _showMessage('Could not sign out: $e');

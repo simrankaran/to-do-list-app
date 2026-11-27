@@ -82,6 +82,9 @@ class FakeTodoRepository implements TodoRepository {
       dueAt: draft.dueAt,
       done: draft.done,
       tagIds: draft.tagIds,
+      startsAt: draft.startsAt,
+      endsAt: draft.endsAt,
+      remind: draft.remind,
     );
     tasks.add(t);
     return t;

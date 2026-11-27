@@ -8,11 +8,77 @@ import 'package:my_app/features/common/file_source.dart';
 import 'package:my_app/features/common/user_avatar.dart';
 import 'package:my_app/features/home/home_page.dart';
 import 'package:my_app/features/tasks/attachments_section.dart';
+import 'package:my_app/services/reminders.dart';
 import 'package:my_app/state/todo_store.dart';
 
 import 'fake_todo_repository.dart';
 
 void main() {
+  timeSlotTests();
+
+  testWidgets('reminders follow task changes and clear on sign out', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(500, 950);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = FakeTodoRepository();
+    final start = DateTime.now().add(const Duration(hours: 2));
+    repo.tasks.add(
+      Task(
+        id: 'gym',
+        title: 'Gym',
+        createdAt: DateTime.now(),
+        dueAt: dateOnly(start),
+        startsAt: start,
+        endsAt: start.add(const Duration(hours: 1)),
+      ),
+    );
+    final reminders = _FakeReminders();
+    await tester.pumpWidget(
+      TodoApp(
+        home: HomePage(
+          repository: repo,
+          reminders: reminders,
+          userEmail: 'test@example.com',
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(reminders.syncs.last.single.id, 'gym');
+
+    // Open the task, make it 2 hours long and save.
+    // The task has no project, so it shows in the default Inbox view.
+    await tester.tap(find.text('Gym'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('2 h'), 200);
+    await tester.tap(find.text('2 h'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(reminders.permissionRequests, 1);
+    expect(repo.tasks.single.endsAt, start.add(const Duration(hours: 2)));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(
+      reminders.syncs.last.single.endsAt,
+      start.add(const Duration(hours: 2)),
+    );
+
+    // Signing out removes this account's reminders from the device.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.byType(UserAvatar),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sign out').first);
+    await tester.pumpAndSettle();
+    expect(reminders.syncs.last, isEmpty);
+  });
+
   void phoneSize(WidgetTester tester) {
     tester.view.physicalSize = const Size(500, 950);
     tester.view.devicePixelRatio = 1;
@@ -94,7 +160,7 @@ void main() {
     expect(find.text('day streak'), findsOneWidget);
     expect(find.text('best streak'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
-    expect(find.text('Completed · last 7 days'), findsOneWidget);
+    expect(find.text('Completed Â· last 7 days'), findsOneWidget);
   });
 
   testWidgets('attach a photo and a PDF to a task', (tester) async {
@@ -142,5 +208,67 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
     expect(repo.attachments.single.name, 'beach.jpg');
+  });
+}
+
+class _FakeReminders implements ReminderScheduler {
+  final syncs = <List<Task>>[];
+  int permissionRequests = 0;
+
+  @override
+  Future<bool> requestPermission() async {
+    permissionRequests++;
+    return true;
+  }
+
+  @override
+  Future<void> sync(List<Task> tasks) async => syncs.add([...tasks]);
+}
+
+void timeSlotTests() {
+  test('a task is in progress only inside its time slot', () {
+    final start = DateTime(2026, 11, 27, 9);
+    final t = Task(
+      id: 't',
+      title: 'Gym',
+      createdAt: start,
+      startsAt: start,
+      endsAt: start.add(const Duration(hours: 1)),
+    );
+    expect(t.isInProgress(start.subtract(const Duration(minutes: 1))), isFalse);
+    expect(t.isInProgress(start), isTrue);
+    expect(t.isInProgress(start.add(const Duration(minutes: 59))), isTrue);
+    expect(t.isInProgress(start.add(const Duration(hours: 1))), isFalse);
+    expect(t.copyWith(done: true).isInProgress(start), isFalse);
+
+    final row = t.toRow();
+    expect(row['starts_at'], start.toUtc().toIso8601String());
+    expect(row['remind'], isTrue);
+    expect(t.copyWith(startsAt: null, endsAt: null).hasTimeSlot, isFalse);
+  });
+
+  test('calendar lists timed tasks in start-time order', () async {
+    final repo = FakeTodoRepository();
+    final day = DateTime(2026, 11, 27);
+    Task at(String id, int hour) => Task(
+      id: id,
+      title: id,
+      createdAt: day,
+      dueAt: day,
+      startsAt: day.add(Duration(hours: hour)),
+      endsAt: day.add(Duration(hours: hour + 1)),
+    );
+    repo.tasks.addAll([
+      at('lunch', 13),
+      Task(id: 'anytime', title: 'anytime', createdAt: day, dueAt: day),
+      at('standup', 9),
+    ]);
+    final store = TodoStore(repo, clock: () => day);
+    await store.load();
+    expect(store.tasksDueOn(day).map((t) => t.id), [
+      'standup',
+      'lunch',
+      'anytime',
+    ]);
   });
 }
