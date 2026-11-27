@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/theme.dart';
 import 'data/assistant_service.dart';
+import 'data/local_assistant.dart';
 import 'data/profile_repository.dart';
 import 'data/supabase_todo_repository.dart';
 import 'features/auth/auth_page.dart';
@@ -54,7 +55,10 @@ class AuthGate extends StatelessWidget {
           userEmail: user.email,
           avatarUrl: user.userMetadata?['avatar_url'] as String?,
           reminders: reminders,
-          assistant: SupabaseAssistantService(Supabase.instance.client),
+          // Claude when an AI key is set up; built-in rules otherwise.
+          assistant: SmartAssistantService(
+            SupabaseAssistantService(Supabase.instance.client),
+          ),
           homeWidget: updateHomeWidget,
           onSignOut: auth.signOut,
         );

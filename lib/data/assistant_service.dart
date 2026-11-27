@@ -91,6 +91,12 @@ abstract interface class AssistantService {
   });
 }
 
+/// The cloud assistant has no working AI key, so it can't answer at all.
+class AssistantUnavailable extends TodoException {
+  const AssistantUnavailable()
+    : super("The AI assistant isn't set up. It needs an AI key in Supabase.");
+}
+
 /// Calls the `assistant` Supabase Edge Function, which holds the AI key.
 class SupabaseAssistantService implements AssistantService {
   SupabaseAssistantService(this._client);
@@ -128,6 +134,9 @@ class SupabaseAssistantService implements AssistantService {
     } on FunctionException catch (e) {
       final details = e.details;
       final code = details is Map ? details['error'] : null;
+      if (code == 'not_configured' || code == 'bad_api_key') {
+        throw const AssistantUnavailable();
+      }
       throw TodoException(switch (code) {
         'not_configured' => "The assistant isn't set up yet. It needs an AI key added in Supabase.",
         'bad_api_key' =>
