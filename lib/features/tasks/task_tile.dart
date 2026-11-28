@@ -51,7 +51,16 @@ class TaskTile extends StatelessWidget {
 
     const live = Color(0xFF16A34A);
     final inProgress = task.isInProgress(store.now);
+    final fromOther = store.isFromOther(task);
     final badges = <Widget>[
+      if (store.partnerOf(task) case final person?)
+        _Badge(
+          icon: fromOther
+              ? Icons.call_received_rounded
+              : Icons.person_add_alt_1_rounded,
+          text: fromOther ? 'From ${person.name}' : 'To ${person.name}',
+          color: scheme.tertiary,
+        ),
       if (task.inProgress && !task.done)
         _Badge(
           icon: Icons.directions_run_rounded,

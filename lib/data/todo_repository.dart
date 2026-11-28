@@ -16,6 +16,13 @@ class TodoException implements Exception {
 /// The app talks only to this interface, so the backend can be swapped
 /// (Supabase in production, an in-memory fake in tests).
 abstract interface class TodoRepository {
+  /// The signed-in account, to tell my tasks from ones assigned to me.
+  String? get currentUserId;
+
+  /// Fires when a task shared with another person changes on the server
+  /// (assigned to me, or one of mine was started or finished by them).
+  Stream<void> get sharedChanges;
+
   Future<List<Project>> fetchProjects();
   Future<Project> createProject(String name, int color);
   Future<void> updateProject(Project project);

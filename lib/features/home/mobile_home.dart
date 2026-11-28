@@ -312,6 +312,10 @@ class _HomeTab extends StatelessWidget {
                   final task = tasks[i];
                   return Dismissible(
                     key: ValueKey(task.id),
+                    // A task someone assigned to me is theirs to delete.
+                    direction: store.isFromOther(task)
+                        ? DismissDirection.none
+                        : DismissDirection.horizontal,
                     background: const _SwipeDelete(Alignment.centerLeft),
                     secondaryBackground: const _SwipeDelete(
                       Alignment.centerRight,

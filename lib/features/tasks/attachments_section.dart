@@ -1,4 +1,4 @@
-﻿import 'package:material_ui/material_ui.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models.dart';
@@ -6,7 +6,8 @@ import '../../state/todo_store.dart';
 import '../common/dialogs.dart';
 import '../common/file_source.dart';
 
-/// Photos and PDFs saved on a task: thumbnails, add, open and delete.
+/// Photos, videos, PDFs and presentations saved on a task: thumbnails, add,
+/// open and delete.
 class AttachmentsSection extends StatefulWidget {
   const AttachmentsSection({
     super.key,
@@ -14,12 +15,20 @@ class AttachmentsSection extends StatefulWidget {
     required this.task,
     this.photoPicker = pickPhoto,
     this.pdfPicker = pickPdf,
+    this.videoPicker = pickVideo,
+    this.presentationPicker = pickPresentation,
+    this.readOnly = false,
   });
 
   final TodoStore store;
   final Task task;
   final Future<PickedAttachment?> Function({required bool camera}) photoPicker;
   final Future<PickedAttachment?> Function() pdfPicker;
+  final Future<PickedAttachment?> Function() videoPicker;
+  final Future<PickedAttachment?> Function() presentationPicker;
+
+  /// View only: for a task another person assigned to me.
+  final bool readOnly;
 
   @override
   State<AttachmentsSection> createState() => _AttachmentsSectionState();
@@ -64,35 +73,56 @@ class _AttachmentsSectionState extends State<AttachmentsSection> {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _add(() => widget.photoPicker(camera: true));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose photo'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _add(() => widget.photoPicker(camera: false));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.picture_as_pdf_outlined),
-              title: const Text('Choose PDF'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _add(widget.pdfPicker);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+        // Scrolls on short screens (a phone held sideways).
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _add(() => widget.photoPicker(camera: true));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose photo'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _add(() => widget.photoPicker(camera: false));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: const Text('Choose PDF'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _add(widget.pdfPicker);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam_outlined),
+                title: const Text('Choose video'),
+                subtitle: const Text('Up to 50 MB'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _add(widget.videoPicker);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.slideshow_outlined),
+                title: const Text('Choose presentation'),
+                subtitle: const Text('PowerPoint (.ppt, .pptx)'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _add(widget.presentationPicker);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -112,7 +142,7 @@ class _AttachmentsSectionState extends State<AttachmentsSection> {
         Uri.parse(url),
         mode: LaunchMode.externalApplication,
       );
-      if (!ok) _snack('No app could open this PDF.');
+      if (!ok) _snack('No app could open this file.');
     }
   }
 
@@ -134,6 +164,12 @@ class _AttachmentsSectionState extends State<AttachmentsSection> {
       listenable: widget.store,
       builder: (context, _) {
         final files = widget.store.attachmentsOf(widget.task.id);
+        if (widget.readOnly && files.isEmpty) {
+          return Text(
+            'No files on this task.',
+            style: Theme.of(context).textTheme.bodySmall,
+          );
+        }
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -144,10 +180,10 @@ class _AttachmentsSectionState extends State<AttachmentsSection> {
                 attachment: a,
                 url: a.isImage ? _url(a) : null,
                 onTap: () => _open(a),
-                onDelete: () => _delete(a),
+                onDelete: widget.readOnly ? null : () => _delete(a),
               ),
             for (var i = 0; i < _uploading; i++) const _UploadingThumb(),
-            _AddThumb(onTap: _showAddMenu),
+            if (!widget.readOnly) _AddThumb(onTap: _showAddMenu),
           ],
         );
       },
@@ -162,19 +198,26 @@ class _Thumb extends StatelessWidget {
     super.key,
     required this.attachment,
     required this.onTap,
-    required this.onDelete,
+    this.onDelete,
     this.url,
   });
 
   final Attachment attachment;
   final Future<String?>? url;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+
+  /// Null when the file can only be viewed.
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final (icon, iconColor) = attachment.isVideo
+        ? (Icons.play_circle_fill_rounded, scheme.primary)
+        : attachment.isPresentation
+        ? (Icons.slideshow_rounded, scheme.tertiary)
+        : (Icons.picture_as_pdf_rounded, scheme.error);
 
     final Widget content;
     if (attachment.isImage && url != null) {
@@ -199,7 +242,7 @@ class _Thumb extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.picture_as_pdf_rounded, size: 34, color: scheme.error),
+            Icon(icon, size: 34, color: iconColor),
             const SizedBox(height: 4),
             Text(
               attachment.name,
@@ -231,17 +274,18 @@ class _Thumb extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              right: 2,
-              top: 2,
-              child: IconButton.filledTonal(
-                tooltip: 'Delete ${attachment.name}',
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                onPressed: onDelete,
-                icon: const Icon(Icons.close_rounded),
+            if (onDelete != null)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: IconButton.filledTonal(
+                  tooltip: 'Delete ${attachment.name}',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 16,
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.close_rounded),
+                ),
               ),
-            ),
           ],
         ),
       ),

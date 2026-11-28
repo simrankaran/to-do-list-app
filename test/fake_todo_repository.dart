@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:my_app/data/models.dart';
@@ -12,6 +13,15 @@ class FakeTodoRepository implements TodoRepository {
   int _id = 0;
 
   String _newId() => 'id${_id++}';
+
+  @override
+  String? currentUserId = 'me';
+
+  /// Add an event to make the app reload shared tasks.
+  final shared = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get sharedChanges => shared.stream;
 
   Future<T> _run<T>(T Function() op) async {
     if (failNext) {
@@ -92,6 +102,8 @@ class FakeTodoRepository implements TodoRepository {
       alertSound: draft.alertSound,
       repeat: draft.repeat,
       repeatDays: draft.repeatDays,
+      ownerId: currentUserId,
+      assigneeId: draft.assigneeId,
     );
     tasks.add(t);
     return t;

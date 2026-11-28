@@ -79,5 +79,6 @@ Task? nextOccurrence(Task task, DateTime today) {
     alertSound: task.alertSound,
     repeat: task.repeat,
     repeatDays: task.repeatDays,
+    assigneeId: task.assigneeId,
   );
 }

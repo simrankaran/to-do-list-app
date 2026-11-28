@@ -121,6 +121,28 @@ class _HomePageState extends State<HomePage> {
       _refreshPeopleBadge();
       _socialSub = social.changes.listen((_) => _refreshPeopleBadge());
     }
+    _sharedSub = widget.repository.sharedChanges.listen((_) {
+      // Several changes often arrive together; reload once.
+      _sharedTimer?.cancel();
+      _sharedTimer = Timer(const Duration(seconds: 1), _reloadShared);
+    });
+  }
+
+  StreamSubscription<void>? _sharedSub;
+  Timer? _sharedTimer;
+
+  /// A task shared with another person changed: show it, and say so when it
+  /// is a new task for me. Its reminders are scheduled like my own.
+  Future<void> _reloadShared() async {
+    final arrived = await _store.refreshShared();
+    if (!mounted || arrived.isEmpty) return;
+    final first = arrived.first;
+    final who = _store.partnerOf(first)?.name ?? 'Someone';
+    _showMessage(
+      arrived.length == 1
+          ? '$who assigned you "${first.title}"'
+          : '$who assigned you ${arrived.length} tasks',
+    );
   }
 
   @override
@@ -171,6 +193,8 @@ class _HomePageState extends State<HomePage> {
     _completionSub.cancel();
     _reminderTimer?.cancel();
     _socialSub?.cancel();
+    _sharedSub?.cancel();
+    _sharedTimer?.cancel();
     _store.removeListener(_queueReminderSync);
     _store.dispose();
     _search.dispose();
@@ -233,6 +257,12 @@ class _HomePageState extends State<HomePage> {
     try {
       final unread = await social.unreadCounts();
       final connections = await social.fetchConnections();
+      if (!mounted) return;
+      // Connected people are who a task can be assigned to.
+      _store.people = [
+        for (final c in connections)
+          if (c.status == LinkStatus.accepted) c.person,
+      ];
       final count =
           unread.values.fold<int>(0, (sum, n) => sum + n) +
           connections.where((c) => c.status == LinkStatus.incoming).length;
@@ -570,6 +600,10 @@ class _HomePageState extends State<HomePage> {
                                 padding: const EdgeInsets.only(bottom: 10),
                                 child: Dismissible(
                                   key: ValueKey('dismiss-${task.id}'),
+                                  // A task someone assigned to me is theirs to delete.
+                                  direction: _store.isFromOther(task)
+                                      ? DismissDirection.none
+                                      : DismissDirection.horizontal,
                                   background: const _SwipeBackground(
                                     Alignment.centerLeft,
                                   ),

@@ -123,6 +123,8 @@ class Task {
     this.repeat = RepeatRule.none,
     this.repeatDays = 0,
     this.inProgress = false,
+    this.ownerId,
+    this.assigneeId,
   });
 
   /// A task that has not been saved yet. The database assigns the real id.
@@ -144,7 +146,9 @@ class Task {
     AlertSound alertSound = AlertSound.standard,
     RepeatRule repeat = RepeatRule.none,
     int repeatDays = 0,
+    String? assigneeId,
   }) => Task(
+    assigneeId: assigneeId,
     id: '',
     title: title,
     createdAt: DateTime.now(),
@@ -193,6 +197,8 @@ class Task {
       repeat: RepeatRule.parse(json['repeat_rule'] as String?),
       repeatDays: (json['repeat_days'] as num?)?.toInt() ?? 0,
       inProgress: json['in_progress'] as bool? ?? false,
+      ownerId: json['user_id'] as String?,
+      assigneeId: json['assignee_id'] as String?,
       tagIds: [
         for (final link in links)
           (link as Map<String, dynamic>)['tag_id'] as String,
@@ -238,6 +244,12 @@ class Task {
 
   /// Being worked on right now (the board's "Doing" column).
   final bool inProgress;
+
+  /// The account the task belongs to (null for a task not saved yet).
+  final String? ownerId;
+
+  /// The connected person this task is assigned to, if any.
+  final String? assigneeId;
 
   /// Whether [RepeatRule.days] includes [weekday] (1 = Monday ... 7 = Sunday).
   bool repeatsOn(int weekday) => repeatDays & (1 << (weekday - 1)) != 0;
@@ -296,7 +308,12 @@ class Task {
     Object? completedAt = _keep,
     Object? startsAt = _keep,
     Object? endsAt = _keep,
+    Object? assigneeId = _keep,
   }) => Task(
+    ownerId: ownerId,
+    assigneeId: identical(assigneeId, _keep)
+        ? this.assigneeId
+        : assigneeId as String?,
     id: id,
     createdAt: createdAt,
     parentId: parentId,
@@ -364,6 +381,9 @@ class Attachment {
 
   bool get isImage => mimeType.startsWith('image/');
   bool get isPdf => mimeType == 'application/pdf';
+  bool get isVideo => mimeType.startsWith('video/');
+  bool get isPresentation =>
+      mimeType.contains('powerpoint') || mimeType.contains('presentation');
 
   String get sizeLabel {
     if (sizeBytes < 1024) return '$sizeBytes B';

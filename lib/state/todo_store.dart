@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/models.dart';
 import '../data/recurrence.dart';
+import '../data/social_models.dart';
 import '../data/todo_repository.dart';
 import '../services/reminders.dart';
 
@@ -117,6 +118,66 @@ class TodoStore extends ChangeNotifier {
   final List<Attachment> _deletedAttachments = [];
   bool loading = true;
   String? loadError;
+
+  // Working with other people ------------------------------------------------
+
+  /// Connected people a task can be assigned to. Set by the home page.
+  List<Profile> _people = [];
+  List<Profile> get people => _people;
+  set people(List<Profile> value) {
+    final same =
+        value.length == _people.length &&
+        Iterable<int>.generate(value.length).every(
+          (i) =>
+              value[i].id == _people[i].id &&
+              value[i].name == _people[i].name &&
+              value[i].avatarUrl == _people[i].avatarUrl,
+        );
+    if (same) return;
+    _people = value;
+    notifyListeners();
+  }
+
+  String? get myId => _repo.currentUserId;
+
+  Profile? personById(String? id) =>
+      id == null ? null : _people.where((p) => p.id == id).firstOrNull;
+
+  /// True for a task another person assigned to me. I can start and finish
+  /// it, but only they can change or delete it.
+  bool isFromOther(Task task) =>
+      task.ownerId != null && myId != null && task.ownerId != myId;
+
+  /// The other person on a shared task: who gave it to me, or who I gave it
+  /// to. Null for a task that is only mine.
+  Profile? partnerOf(Task task) {
+    final id = isFromOther(task) ? task.ownerId : task.assigneeId;
+    if (id == null) return null;
+    return personById(id) ?? Profile(id: id);
+  }
+
+  /// Quietly re-reads tasks and files after a shared task changed on the
+  /// server. Returns tasks newly assigned to me.
+  Future<List<Task>> refreshShared() async {
+    if (loading) return const [];
+    try {
+      final results = await Future.wait<List<Object>>([
+        _repo.fetchTasks(),
+        _repo.fetchAttachments(),
+      ]);
+      final known = {for (final t in tasks) t.id};
+      tasks = results[0].cast<Task>();
+      attachments = results[1].cast<Attachment>();
+      notifyListeners();
+      return [
+        for (final t in tasks)
+          if (isFromOther(t) && !known.contains(t.id)) t,
+      ];
+    } catch (_) {
+      // A missed refresh is caught up by the next one or by pull-to-refresh.
+      return const [];
+    }
+  }
 
   TodoView _view = TodoView.inbox;
   String _query = '';
@@ -344,6 +405,9 @@ class TodoStore extends ChangeNotifier {
       ));
     }
 
+    // Repeating is the owner's business: finishing a task someone assigned
+    // to me must not create copies in my own list.
+    if (isFromOther(task)) return;
     final draft = nextOccurrence(task, today);
     if (draft == null) return;
     // Ticking, unticking and ticking again must not create a duplicate.
@@ -372,6 +436,14 @@ class TodoStore extends ChangeNotifier {
   /// Removes [task] and its subtasks. Returns what was removed so it can be
   /// passed to [restore], or null if the delete failed.
   Future<List<Task>?> deleteTask(Task task) async {
+    if (isFromOther(task)) {
+      final who = partnerOf(task)?.name ?? 'the person who assigned it';
+      if (!_errors.isClosed) {
+        _errors.add('Only $who can delete this task.');
+      }
+      notifyListeners(); // puts a swiped row back
+      return null;
+    }
     final removed = [task, ...subtasksOf(task.id)];
     final ids = {for (final t in removed) t.id};
     final before = tasks;

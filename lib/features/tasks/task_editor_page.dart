@@ -2,8 +2,11 @@ import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
+import '../../data/social_models.dart';
 import '../../state/todo_store.dart';
 import '../common/dialogs.dart';
+import '../common/user_avatar.dart';
+import 'assigned_task_page.dart';
 import 'attachments_section.dart';
 import 'task_tile.dart';
 
@@ -51,6 +54,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   bool _saving = false;
   bool _titleError = false;
 
+  /// The connected person this task is given to; null keeps it to myself.
+  String? _assigneeId;
+
   TodoStore get store => widget.store;
   bool get _isNew => widget.task == null;
 
@@ -71,6 +77,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _alertSound = t?.alertSound ?? AlertSound.standard;
     _repeat = t?.repeat ?? RepeatRule.none;
     _repeatDays = t?.repeatDays ?? 0;
+    _assigneeId = t?.assigneeId;
     if (t != null) {
       _dueAt = t.dueAt;
       _projectId = t.projectId;
@@ -152,6 +159,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           alertSound: _alertSound,
           repeat: _repeat,
           repeatDays: _repeatDays,
+          assigneeId: _assigneeId,
         ),
       );
       if (saved == null) {
@@ -177,6 +185,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
           alertSound: _alertSound,
           repeat: _repeat,
           repeatDays: _repeatDays,
+          assigneeId: _assigneeId,
         ),
       );
     }
@@ -220,6 +229,12 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
 
   @override
   Widget build(BuildContext context) {
+    // A task someone assigned to me can be viewed, started and finished,
+    // but only they can change it.
+    final existing = widget.task;
+    if (existing != null && store.isFromOther(existing)) {
+      return AssignedTaskPage(store: store, taskId: existing.id);
+    }
     final theme = Theme.of(context);
     final today = store.today;
     final quickDates = {
@@ -375,6 +390,73 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                   onTest: _testAlert,
                 ),
               ],
+              if (widget.task?.isSubtask != true) ...[
+                const SizedBox(height: 20),
+                _Section('Assign to'),
+                if (store.people.isEmpty && _assigneeId == null)
+                  Text(
+                    'Connect with someone in People to give them tasks.',
+                    style: theme.textTheme.bodySmall,
+                  )
+                else ...[
+                  DropdownButtonFormField<String?>(
+                    initialValue: _assigneeId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_outline_rounded),
+                            SizedBox(width: 8),
+                            Text('Just me'),
+                          ],
+                        ),
+                      ),
+                      for (final p in [
+                        ...store.people,
+                        // Still assigned to someone no longer in the list.
+                        if (_assigneeId != null &&
+                            store.personById(_assigneeId) == null)
+                          Profile(id: _assigneeId!),
+                      ])
+                        DropdownMenuItem(
+                          value: p.id,
+                          child: Row(
+                            children: [
+                              UserAvatar(
+                                name: p.name,
+                                url: p.avatarUrl,
+                                radius: 12,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  p.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => setState(() => _assigneeId = v),
+                  ),
+                  if (_assigneeId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'They will see this task, its files and its '
+                        'reminders, and can mark it started or done. '
+                        'Your other tasks stay private.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                ],
+              ],
               const SizedBox(height: 20),
               _Section('Project'),
               DropdownButtonFormField<String?>(
@@ -430,10 +512,11 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                   ],
                 ),
               const SizedBox(height: 20),
-              _Section('Photos & PDFs'),
+              _Section('Photos, videos & files'),
               if (_isNew)
                 Text(
-                  'Save the task first, then attach photos or PDFs.',
+                  'Save the task first, then attach photos, videos, PDFs or '
+                  'presentations.',
                   style: theme.textTheme.bodySmall,
                 )
               else

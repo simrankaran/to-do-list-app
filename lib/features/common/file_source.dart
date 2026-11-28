@@ -55,3 +55,41 @@ String mimeTypeFor(String name) {
   if (lower.endsWith('.heic')) return 'image/heic';
   return 'image/jpeg';
 }
+
+/// Picks a video from the device.
+Future<PickedAttachment?> pickVideo() async {
+  final files = await FilePicker.pickFiles(type: FileType.video);
+  if (files.isEmpty) return null;
+  final file = files.first;
+  return PickedAttachment(
+    await file.readAsBytes(),
+    file.name,
+    videoMimeTypeFor(file.name),
+  );
+}
+
+/// Picks a PowerPoint presentation from the device.
+Future<PickedAttachment?> pickPresentation() async {
+  final files = await FilePicker.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: const ['ppt', 'pptx'],
+  );
+  if (files.isEmpty) return null;
+  final file = files.first;
+  return PickedAttachment(
+    await file.readAsBytes(),
+    file.name,
+    file.name.toLowerCase().endsWith('.ppt')
+        ? 'application/vnd.ms-powerpoint'
+        : 'application/vnd.openxmlformats-officedocument'
+              '.presentationml.presentation',
+  );
+}
+
+String videoMimeTypeFor(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.3gp')) return 'video/3gpp';
+  return 'video/mp4';
+}
