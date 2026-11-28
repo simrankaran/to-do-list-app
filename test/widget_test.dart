@@ -25,6 +25,8 @@ void main() {
           repository: repo,
           userEmail: 'test@example.com',
           onSignOut: () async {},
+          // Tests run as Android; allow the side-panel layout when wide.
+          allowDesktopLayout: true,
         ),
       ),
     );
@@ -62,7 +64,10 @@ void main() {
     expect(repo.tasks.single.done, isTrue);
     expect(find.text('Buy milk'), findsNothing); // completed tasks hidden
 
-    await tester.tap(find.byTooltip('Show completed tasks'));
+    // "Show completed tasks" lives in the ⋮ menu on phones.
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show completed tasks'));
     await tester.pumpAndSettle();
     await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
     await tester.pumpAndSettle();
@@ -169,6 +174,7 @@ void main() {
           profile: profile,
           userEmail: 'test@example.com',
           onSignOut: () async {},
+          allowDesktopLayout: true,
           pickImage: () async =>
               PickedImage(Uint8List.fromList([1, 2, 3]), 'image/png'),
         ),

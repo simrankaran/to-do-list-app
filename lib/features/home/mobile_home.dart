@@ -1,4 +1,4 @@
-﻿import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../data/models.dart';
@@ -96,43 +96,50 @@ class _MobileHomeState extends State<MobileHome> {
     final name = widget.userEmail ?? '';
 
     return Scaffold(
-      body: IndexedStack(
-        // The New task slot (2) opens a sheet, so pages after it shift down.
-        index: _tab > _new ? _tab - 1 : _tab,
-        children: [
-          _HomeTab(
-            store: widget.store,
-            onOpen: (t) => widget.onOpenEditor(t, null, null),
-            onDelete: widget.onDelete,
-            onOpenAssistant: widget.onOpenAssistant,
-            onOpenBoard: widget.onOpenBoard,
-            onOpenPeople: widget.onOpenPeople,
-            peopleBadge: widget.peopleBadge,
+      // On tablets and phones turned sideways, keep the content at a
+      // comfortable reading width instead of stretching it edge to edge.
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: IndexedStack(
+            // The New task slot (2) opens a sheet, so pages after it shift down.
+            index: _tab > _new ? _tab - 1 : _tab,
+            children: [
+              _HomeTab(
+                store: widget.store,
+                onOpen: (t) => widget.onOpenEditor(t, null, null),
+                onDelete: widget.onDelete,
+                onOpenAssistant: widget.onOpenAssistant,
+                onOpenBoard: widget.onOpenBoard,
+                onOpenPeople: widget.onOpenPeople,
+                peopleBadge: widget.peopleBadge,
+              ),
+              _SearchTab(
+                store: widget.store,
+                onOpen: (t) => widget.onOpenEditor(t, null, null),
+              ),
+              CalendarTab(
+                store: widget.store,
+                onOpen: (t) => widget.onOpenEditor(t, null, null),
+                onAdd: _addOn,
+              ),
+              _ProfileTab(
+                store: widget.store,
+                email: widget.userEmail,
+                avatarUrl: widget.avatarUrl,
+                avatarBusy: widget.avatarBusy,
+                onChangeAvatar: widget.onChangeAvatar,
+                onRemoveAvatar: widget.onRemoveAvatar,
+                onSignOut: widget.onSignOut,
+                onOpenSettings: widget.onOpenSettings,
+                onShowView: (v) {
+                  widget.store.view = v;
+                  _goHome();
+                },
+              ),
+            ],
           ),
-          _SearchTab(
-            store: widget.store,
-            onOpen: (t) => widget.onOpenEditor(t, null, null),
-          ),
-          CalendarTab(
-            store: widget.store,
-            onOpen: (t) => widget.onOpenEditor(t, null, null),
-            onAdd: _addOn,
-          ),
-          _ProfileTab(
-            store: widget.store,
-            email: widget.userEmail,
-            avatarUrl: widget.avatarUrl,
-            avatarBusy: widget.avatarBusy,
-            onChangeAvatar: widget.onChangeAvatar,
-            onRemoveAvatar: widget.onRemoveAvatar,
-            onSignOut: widget.onSignOut,
-            onOpenSettings: widget.onOpenSettings,
-            onShowView: (v) {
-              widget.store.view = v;
-              _goHome();
-            },
-          ),
-        ],
+        ),
       ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
@@ -351,28 +358,37 @@ class _HomeTab extends StatelessWidget {
               icon: const Icon(Icons.auto_awesome_rounded),
               onPressed: onOpenAssistant,
             ),
-          PopupMenuButton<SortBy>(
-            tooltip: 'Sort',
-            icon: const Icon(Icons.swap_vert_rounded),
-            initialValue: store.sortBy,
-            onSelected: (s) => store.sortBy = s,
+          // Less-used choices live in one menu so the bar stays tidy on
+          // small phones.
+          PopupMenuButton<Object>(
+            tooltip: 'More options',
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (choice) {
+              if (choice is SortBy) {
+                store.sortBy = choice;
+              } else if (choice == _toggleCompleted) {
+                store.showCompleted = !store.showCompleted;
+              }
+            },
             itemBuilder: (_) => [
+              CheckedPopupMenuItem<Object>(
+                value: _toggleCompleted,
+                checked: store.showCompleted,
+                child: const Text('Show completed tasks'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<Object>(
+                enabled: false,
+                height: 32,
+                child: Text('Sort by'),
+              ),
               for (final s in SortBy.values)
-                CheckedPopupMenuItem(
+                CheckedPopupMenuItem<Object>(
                   value: s,
                   checked: s == store.sortBy,
                   child: Text(s.label),
                 ),
             ],
-          ),
-          IconButton(
-            tooltip: store.showCompleted
-                ? 'Hide completed tasks'
-                : 'Show completed tasks',
-            isSelected: store.showCompleted,
-            icon: const Icon(Icons.visibility_off_outlined),
-            selectedIcon: const Icon(Icons.visibility_rounded),
-            onPressed: () => store.showCompleted = !store.showCompleted,
           ),
           const SizedBox(width: 4),
         ],
@@ -380,6 +396,8 @@ class _HomeTab extends StatelessWidget {
       body: body,
     );
   }
+
+  static const _toggleCompleted = 'toggle-completed';
 }
 
 /// Horizontally scrolling circles for views, projects and tags.

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -40,7 +41,20 @@ class HomePage extends StatefulWidget {
     this.social,
     this.settings,
     this.sounds = const SilentSoundPlayer(),
+    this.allowDesktopLayout,
   });
+
+  /// Whether a wide window may use the desktop layout (side panel). Phones
+  /// and tablets always get the full-featured phone layout, in any
+  /// orientation; the desktop layout is for browsers and computers. Null
+  /// decides from the platform.
+  final bool? allowDesktopLayout;
+
+  static bool get _desktopPlatform =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.linux;
 
   /// Theme, sound and confetti choices; without it there are no
   /// celebrations and Settings has no Appearance section.
@@ -326,7 +340,9 @@ class _HomePageState extends State<HomePage> {
     return ListenableBuilder(
       listenable: _store,
       builder: (context, _) {
-        final wide = MediaQuery.sizeOf(context).width >= _wideLayout;
+        final wide =
+            (widget.allowDesktopLayout ?? HomePage._desktopPlatform) &&
+            MediaQuery.sizeOf(context).width >= _wideLayout;
         if (!wide) {
           return MobileHome(
             store: _store,

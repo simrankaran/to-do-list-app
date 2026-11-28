@@ -43,6 +43,13 @@ class TodoApp extends StatelessWidget {
       themeMode: s?.themeMode ?? ThemeMode.system,
       // Colours glide into each other when the theme changes.
       themeAnimationDuration: const Duration(milliseconds: 400),
+      // Text follows the phone's font size setting, but only up to a point,
+      // so very large settings can't push the layout off the screen.
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        minScaleFactor: 0.85,
+        maxScaleFactor: 1.3,
+        child: child!,
+      ),
       home:
           home ??
           AuthGate(reminders: reminders, settings: settings, sounds: sounds),
