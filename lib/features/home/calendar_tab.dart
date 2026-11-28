@@ -70,137 +70,150 @@ class _CalendarTabState extends State<CalendarTab> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Column(
-        children: [
-          // Month header.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
+      // One scrolling page, so the month and the day's tasks both stay
+      // reachable on short screens (a phone held sideways).
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
               children: [
-                IconButton(
-                  tooltip: 'Previous month',
-                  icon: const Icon(Icons.chevron_left_rounded),
-                  onPressed: () => _shiftMonth(-1),
-                ),
-                Expanded(
-                  child: Text(
-                    DateFormat.yMMMM().format(_month),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium,
+                // Month header.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Previous month',
+                        icon: const Icon(Icons.chevron_left_rounded),
+                        onPressed: () => _shiftMonth(-1),
+                      ),
+                      Expanded(
+                        child: Text(
+                          DateFormat.yMMMM().format(_month),
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Next month',
+                        icon: const Icon(Icons.chevron_right_rounded),
+                        onPressed: () => _shiftMonth(1),
+                      ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Next month',
-                  icon: const Icon(Icons.chevron_right_rounded),
-                  onPressed: () => _shiftMonth(1),
+                // Weekday labels.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      for (final d in const ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              d,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-          // Weekday labels.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                for (final d in const ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        d,
+                const SizedBox(height: 4),
+                // Day grid; swipe sideways to change month.
+                GestureDetector(
+                  onHorizontalDragEnd: (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    if (v < -200) _shiftMonth(1);
+                    if (v > 200) _shiftMonth(-1);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: (cells / 7).ceil() * 7,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 7,
+                            mainAxisExtent: 48,
+                          ),
+                      itemBuilder: (context, i) {
+                        final dayNum = i - leading + 1;
+                        if (dayNum < 1 || dayNum > daysInMonth) {
+                          return const SizedBox();
+                        }
+                        final day = DateTime(_month.year, _month.month, dayNum);
+                        return _DayCell(
+                          day: day,
+                          selected: day == _selected,
+                          isToday: day == today,
+                          overdue: day.isBefore(today),
+                          dueCount: dueCounts[day] ?? 0,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selected = day);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                // Selected day's tasks.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${formatDue(_selected, today)} · ${DateFormat('d MMM').format(_selected)}',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      Text(
+                        dayTasks.isEmpty
+                            ? ''
+                            : '${dayTasks.length} task${dayTasks.length == 1 ? '' : 's'}',
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          // Day grid; swipe sideways to change month.
-          GestureDetector(
-            onHorizontalDragEnd: (d) {
-              final v = d.primaryVelocity ?? 0;
-              if (v < -200) _shiftMonth(1);
-              if (v > 200) _shiftMonth(-1);
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: (cells / 7).ceil() * 7,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  mainAxisExtent: 48,
+          if (dayTasks.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: TextButton.icon(
+                    onPressed: () => widget.onAdd(_selected),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Nothing due. Add a task for this day'),
+                  ),
                 ),
-                itemBuilder: (context, i) {
-                  final dayNum = i - leading + 1;
-                  if (dayNum < 1 || dayNum > daysInMonth) {
-                    return const SizedBox();
-                  }
-                  final day = DateTime(_month.year, _month.month, dayNum);
-                  return _DayCell(
-                    day: day,
-                    selected: day == _selected,
-                    isToday: day == today,
-                    overdue: day.isBefore(today),
-                    dueCount: dueCounts[day] ?? 0,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selected = day);
-                    },
-                  );
-                },
+              ),
+            )
+          else
+            SliverList.separated(
+              itemCount: dayTasks.length,
+              separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
+              itemBuilder: (context, i) => TaskTile(
+                key: ValueKey(dayTasks[i].id),
+                task: dayTasks[i],
+                store: store,
+                flat: true,
+                onTap: () => widget.onOpen(dayTasks[i]),
               ),
             ),
-          ),
-          const Divider(height: 1),
-          // Selected day's tasks.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${formatDue(_selected, today)} · ${DateFormat('d MMM').format(_selected)}',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-                Text(
-                  dayTasks.isEmpty
-                      ? ''
-                      : '${dayTasks.length} task${dayTasks.length == 1 ? '' : 's'}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-          ),
-          Expanded(
-            child: dayTasks.isEmpty
-                ? Center(
-                    child: TextButton.icon(
-                      onPressed: () => widget.onAdd(_selected),
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Nothing due. Add a task for this day'),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: dayTasks.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(height: 1, indent: 56),
-                    itemBuilder: (context, i) => TaskTile(
-                      key: ValueKey(dayTasks[i].id),
-                      task: dayTasks[i],
-                      store: store,
-                      flat: true,
-                      onTap: () => widget.onOpen(dayTasks[i]),
-                    ),
-                  ),
-          ),
         ],
       ),
     );

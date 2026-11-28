@@ -433,8 +433,10 @@ class _ViewStrip extends StatelessWidget {
       );
     }
 
+    // The labels grow with the phone's font size; give them the room.
+    final labelGrowth = MediaQuery.textScalerOf(context).scale(16) - 16;
     return SizedBox(
-      height: 108,
+      height: 108 + (labelGrowth > 0 ? labelGrowth : 0) + 2,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
