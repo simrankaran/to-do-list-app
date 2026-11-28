@@ -29,7 +29,9 @@ abstract interface class SocialRepository {
   /// The latest messages with [otherId], oldest first.
   Future<List<ChatMessage>> fetchMessages(String otherId);
   Future<void> sendMessage(String otherId, String body);
-  Future<void> markRead(String otherId);
+
+  /// Permanently deletes messages sent to me, once I have seen them.
+  Future<void> deleteSeen(List<String> messageIds);
 
   /// Unread message counts by sender id.
   Future<Map<String, int>> unreadCounts();
@@ -190,13 +192,12 @@ class SupabaseSocialRepository implements SocialRepository {
   );
 
   @override
-  Future<void> markRead(String otherId) => _guard(
+  Future<void> deleteSeen(List<String> messageIds) => _guard(
     () => _db
         .from('messages')
-        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+        .delete()
         .eq('recipient_id', myId)
-        .eq('sender_id', otherId)
-        .isFilter('read_at', null),
+        .inFilter('id', messageIds),
   );
 
   @override

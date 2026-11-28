@@ -83,7 +83,8 @@ revoke execute on function public.handle_new_user() from public, anon, authentic
 
 -- 4. Messages: a sender supplies only the recipient and the text. The
 --    sender, time and read mark are set by the database.
-revoke insert, delete on public.messages from authenticated;
+-- (Delete stays allowed: the recipient deletes a message once it is seen.)
+revoke insert on public.messages from authenticated;
 grant insert (recipient_id, body) on public.messages to authenticated;
 
 -- 5. Friend requests: remember the email that was typed (shown to the sender

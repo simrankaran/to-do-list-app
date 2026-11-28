@@ -110,4 +110,14 @@ class ChatMessage {
   final String body;
   final DateTime createdAt;
   final DateTime? readAt;
+
+  /// This message, marked as seen by the other person.
+  ChatMessage asSeen() => ChatMessage(
+    id: id,
+    senderId: senderId,
+    recipientId: recipientId,
+    body: body,
+    createdAt: createdAt,
+    readAt: DateTime.now(),
+  );
 }

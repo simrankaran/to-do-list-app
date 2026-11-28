@@ -47,10 +47,33 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
+  /// Messages that are no longer on the server because they were seen.
+  /// They stay on this screen only until the chat is closed.
+  final _seen = <String, ChatMessage>{};
+
   Future<void> _load() async {
     try {
-      final messages = await social.fetchMessages(_otherId);
+      final onServer = await social.fetchMessages(_otherId);
       if (!mounted) return;
+      final serverIds = {for (final m in onServer) m.id};
+      // One of mine that has left the server was seen by the other person.
+      for (final m in _messages) {
+        if (!serverIds.contains(m.id) && !_seen.containsKey(m.id)) {
+          _seen[m.id] = m.readAt == null ? m.asSeen() : m;
+        }
+      }
+      final incoming = [
+        for (final m in onServer)
+          if (m.senderId == _otherId) m,
+      ];
+      for (final m in incoming) {
+        _seen[m.id] = m;
+      }
+      final messages = [
+        ..._seen.values,
+        for (final m in onServer)
+          if (!_seen.containsKey(m.id)) m,
+      ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       final grew = messages.length != _messages.length;
       setState(() {
         _messages = messages;
@@ -58,9 +81,10 @@ class _ChatPageState extends State<ChatPage> {
         _error = null;
       });
       if (grew) _scrollToEnd();
-      // Anything from them that is on screen has now been read.
-      if (messages.any((m) => m.senderId == _otherId && m.readAt == null)) {
-        await social.markRead(_otherId);
+      // Anything from them that is on screen has been seen: remove it from
+      // the server for good.
+      if (incoming.isNotEmpty) {
+        await social.deleteSeen([for (final m in incoming) m.id]);
       }
     } on TodoException catch (e) {
       if (!mounted) return;
@@ -180,6 +204,30 @@ class _ChatPageState extends State<ChatPage> {
             constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.timer_outlined,
+                        size: 14,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Messages are deleted once they are seen',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Expanded(child: list),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
